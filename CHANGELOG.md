@@ -1,3 +1,9 @@
+## Nova Studio 4.0.1 — Windows MSVC compilation hotfix (2026-11-24)
+
+- Avoid Windows SDK macro collisions in App Designer control IDs (`ID_DESIGNER_*`).
+- Normalize Win32 `RECT`/`LONG` dimensions to `int` before command palette layout `std::min`/`std::max`.
+- Windows compilation awaits GitHub Actions re-validation; Linux CTest 10/10 passed.
+
 ## Nova Studio 4.0 Hyper Preview — 2026-11-24
 
 - NEW: fuzzy Command Center with workspace files, current-file symbols and actions.

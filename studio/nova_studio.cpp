@@ -1582,8 +1582,12 @@ class Studio{
     }
     if(!paletteWindow||!paletteEdit||!paletteList){setStatus(L"Could not create Command Center");return;}
     RECT rect{};GetWindowRect(mainWindow,&rect);
-    int x=rect.left+std::max(0,((rect.right-rect.left)-620)/2);
-    int y=rect.top+std::min(125,std::max(25,(rect.bottom-rect.top)/6));
+    // RECT coordinates are Win32 LONG, so normalize dimensions to int before
+    // using std::min/std::max (MSVC rejects mixing LONG and int arguments).
+    const int windowWidth=static_cast<int>(rect.right-rect.left);
+    const int windowHeight=static_cast<int>(rect.bottom-rect.top);
+    int x=static_cast<int>(rect.left)+std::max(0,(windowWidth-620)/2);
+    int y=static_cast<int>(rect.top)+std::min(125,std::max(25,windowHeight/6));
     SetWindowPos(paletteWindow,HWND_TOP,x,y,620,390,SWP_SHOWWINDOW);
     SetWindowTextW(paletteEdit,L"");refreshPalette();
     SetFocus(paletteEdit);
