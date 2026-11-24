@@ -1,0 +1,95 @@
+name: Nova Windows x64 Acceptance
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nova-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout Nova sources
+        uses: actions/checkout@v4
+      - name: Python for tests and PE metadata checks only
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Initialize Microsoft C++ x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build real Windows x64 console runtime, GUI runner and Nova Studio
+        run: ./build_windows.ps1 -Compiler MSVC
+      - name: Check produced PE32+ binaries and subsystems
+        run: >-
+          python tools/verify_pe.py bin/nova-native.exe bin/nova-windowed.exe bin/NovaStudio.exe
+          --console nova-native.exe --gui nova-windowed.exe --gui NovaStudio.exe
+      - name: Build again with CMake and run native C++ editor tests
+        run: |
+          cmake -S . -B build-acceptance -G 'Visual Studio 17 2022' -A x64
+          cmake --build build-acceptance --config Release --target nova-native nova-windowed NovaStudio nova-studio-text-tests
+          ctest --test-dir build-acceptance -C Release --output-on-failure
+      - name: Nova Studio headless text engine and real Win32 controls
+        run: |
+          foreach ($mode in @('--self-test', '--gui-smoke')) {
+            $p = Start-Process -FilePath (Resolve-Path bin/NovaStudio.exe) -ArgumentList $mode -PassThru
+            try {
+              if (-not $p.WaitForExit(15000)) { throw "Studio $mode timeout" }
+              if ($p.ExitCode -ne 0) { throw "Studio $mode failed: $($p.ExitCode)" }
+            } finally {
+              if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+              $p.Dispose()
+            }
+          }
+      - name: Native self-hosting A to B and Windows compiler EXE
+        run: ./tests/smoke_selfhost07.ps1
+      - name: Windows compilerless build and integrity tests
+        run: |
+          ./nova.ps1 doctor
+          ./tests/smoke_portable08.ps1
+          ./tests/smoke_windows.ps1
+      - name: Real Nova Win32 event-driven button test
+        run: ./tests/smoke_win32_click.ps1
+      - name: Full Python-driven native interpreter regression tests (not runtime dependency)
+        run: python -m unittest discover -s tests -v
+      - name: Prepare portable Windows ZIP inputs
+        run: ./tools/create_windows_portable.ps1
+      - name: Accept installed copy outside repository (Unicode path)
+        run: ./tools/test_windows_portable.ps1
+      - name: Archive portable Windows distribution with SHA256
+        run: |
+          $zip='dist/Nova-Windows-x64-Beta2.zip'
+          Compress-Archive -Path 'dist/windows-x64/Nova' -DestinationPath $zip -CompressionLevel Optimal
+          $hash=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText('dist/Nova-Windows-x64-Beta2.zip.sha256', "$hash *Nova-Windows-x64-Beta2.zip`n",[Text.UTF8Encoding]::new($false))
+          "### Windows x64 acceptance PASSED" >> $env:GITHUB_STEP_SUMMARY
+          "- Nova Studio, native runtime, self-hosting and GUI button callback passed." >> $env:GITHUB_STEP_SUMMARY
+          "- Download the *nova-windows-x64* artifact from this run." >> $env:GITHUB_STEP_SUMMARY
+          "- ZIP SHA256: ``$hash``" >> $env:GITHUB_STEP_SUMMARY
+      - name: Upload tested Windows x64 ZIP and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-windows-x64
+          path: |
+            dist/Nova-Windows-x64-Beta2.zip
+            dist/Nova-Windows-x64-Beta2.zip.sha256
+          if-no-files-found: error
+          retention-days: 21
+      - name: Upload Windows diagnostic logs if acceptance fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-windows-diagnostics
+          path: |
+            build-acceptance/Testing/Temporary/LastTest.log
+            build-acceptance/CMakeFiles/CMakeConfigureLog.yaml
+            build-acceptance/CMakeCache.txt
+          if-no-files-found: ignore
