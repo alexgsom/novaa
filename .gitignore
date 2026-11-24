@@ -1,0 +1,11 @@
+# Locally generated executables and build output
+/bin/
+/build/
+/build-*/
+/dist/linux-x64/
+/dist/portable/
+/dist/windows-x64/
+/dist/*.zip
+/dist/*.sha256
+**/__pycache__/
+*.py[cod]
