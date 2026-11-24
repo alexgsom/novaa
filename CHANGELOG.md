@@ -1,3 +1,14 @@
+## 4.2 Aura — 2026-11-24
+
+- Custom dark `WC_TABCONTROLW` renderer, double-buffered; native tab-switch behavior remains.
+- Fixed stray `Open` button at (0,0); all Open functionality is available via menu/shortcut.
+- Uniform owner-drawn GDI buttons with hover/focus/pressed handling.
+- Consistent rail vector icons, spacing and context-aware AI action grid.
+- Optional dark theme on Windows native scroll controls.
+- Updated Win32 GUI smoke and cross-platform source regression tests.
+- No changes to Nova source language, compiler, bytecode VM or App Designer model.
+- Actual Windows compilation/visual verification remains pending.
+
 # Nova Studio 4.1 — Visual Redesign
 
 - Removed permanent native menubar; preserved menus inside a new `≡ Menu` dropdown.

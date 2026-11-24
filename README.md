@@ -1,3 +1,9 @@
+# Nova Studio 4.2 — Aura visual refresh
+
+**New in 4.2:** custom dark tabs and hoverable buttons, vector icon navigation, fixed orphan Open button, compact AI tools and refreshed layout. See [NOVA_STUDIO_4_2_AURA_UA.md](NOVA_STUDIO_4_2_AURA_UA.md). The HTML design concept is not a native Windows screenshot. Windows validation is pending.
+
+---
+
 # Nova Studio 4.1 — Visual Redesign (Windows preview)
 
 **NEW IN 4.1:** The application shell is replaced in the real Win32 Studio source: custom two-tier command deck, permanent activity rail, Explorer/Source/AI panels, Quiet Slate dark surfaces and collapsible console (`Ctrl+J`). The old permanent native Windows menu bar is removed; full menus are available in `≡ Menu`.
