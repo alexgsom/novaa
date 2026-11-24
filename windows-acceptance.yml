@@ -18,6 +18,29 @@ jobs:
     steps:
       - name: Checkout Nova sources
         uses: actions/checkout@v4
+      - name: Verify self-host test in checked-out Git revision
+        run: |
+          Write-Host "GitHub event: $env:GITHUB_EVENT_NAME"
+          Write-Host "GitHub ref: $env:GITHUB_REF"
+          Write-Host "GitHub SHA: $env:GITHUB_SHA"
+          Write-Host "Checked-out commit: $(git rev-parse HEAD)"
+          Write-Host "Working directory: $(Get-Location)"
+          Write-Host "Checkout root: $env:GITHUB_WORKSPACE"
+          $relative = 'tests/smoke_selfhost07.ps1'
+          $target = Join-Path $env:GITHUB_WORKSPACE 'tests\smoke_selfhost07.ps1'
+          Write-Host "Git tree entry for $relative :"
+          git ls-tree HEAD -- $relative
+          Write-Host 'Files in tests folder:'
+          $testDir = Join-Path $env:GITHUB_WORKSPACE 'tests'
+          if (Test-Path -LiteralPath $testDir -PathType Container) {
+            Get-ChildItem -LiteralPath $testDir -Force | ForEach-Object { Write-Host $_.Name }
+          } else {
+            Write-Host 'tests/ folder is missing from checkout'
+          }
+          if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            throw "Missing at checkout: $target. This workflow run is not using a commit that contains the expected test at the correct path (or checkout omitted it)."
+          }
+          Write-Host 'PASS: self-host smoke script exists immediately after checkout.'
       - name: Python for tests and PE metadata checks only
         uses: actions/setup-python@v5
         with:
@@ -63,7 +86,19 @@ jobs:
             Get-Content -LiteralPath $traceFile -Tail 30 | ForEach-Object { Write-Host $_ }
           }
       - name: Native self-hosting A to B and Windows compiler EXE
-        run: ./tests/smoke_selfhost07.ps1
+        run: |
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'tests\smoke_selfhost07.ps1'
+          Write-Host "Running test: $scriptPath"
+          Write-Host "Current directory: $(Get-Location)"
+          if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+            Write-Host "Checked-out commit: $(git rev-parse HEAD)"
+            Write-Host 'Git entry at this commit:'
+            git ls-tree HEAD -- 'tests/smoke_selfhost07.ps1'
+            Write-Host 'Git status of tests:'
+            git status --short -- tests
+            throw "Missing before self-host execution: $scriptPath. Compare with the early checkout verification step."
+          }
+          & $scriptPath
       - name: Windows compilerless build and integrity tests
         run: |
           ./nova.ps1 doctor
