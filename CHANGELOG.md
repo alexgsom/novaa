@@ -1,5 +1,12 @@
-## 4.0.2 — Hyper40 Windows CI diagnostics (24.11.2026)
-Windows acceptance successfully built NovaStudio.exe but the Hyper40 CTest process ended with 0xc0000409. Updated the portable Hyper40 test: explicit Release-safe CHECK diagnostics, unique temporary directories, guarded optional access, and stage-level stdout. All 10 Linux native CTests and Clang ASan/UBSan Hyper40 check passed. Windows retest pending; product runtime unchanged.
+# Nova Studio 4.1 — Visual Redesign
+
+- Removed permanent native menubar; preserved menus inside a new `≡ Menu` dropdown.
+- Added two-tier command deck, left activity rail with tooltips, new visual zones and Quiet Slate palette.
+- Added collapsible terminal and diagnostics (`Ctrl+J`).
+- Expanded real Windows GUI smoke checks for layout and console visibility.
+- 10/10 portable C++ tests and 4/4 shell source checks passed on Linux; Windows GUI pending validation.
+
+---
 
 ## Nova Studio 4.0.1 — Windows MSVC compilation hotfix (2026-11-24)
 

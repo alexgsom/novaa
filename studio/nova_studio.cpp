@@ -1,5 +1,5 @@
-// Nova Studio 4.0: command center, project X-Ray, Quality Gate and Time Machine.
-// Preserves the restrained dark design of Nova Studio Next (no neon/cyberpunk redesign).
+// Nova Studio 4.1: redesigned window shell, two-level command deck, activity rail, collapsible console.
+// Existing Nova 4.0 editor/compiler/AI/Designer capabilities are preserved.
 // Requires the prebuilt native Nova runtime and the Nova-authored .nbc compiler.
 #define UNICODE
 #define _UNICODE
@@ -41,10 +41,13 @@ static constexpr UINT JOB_DONE=WM_APP+77, AI_DONE=WM_APP+78, JOB_OUTPUT=WM_APP+8
 static constexpr int ID_EDITOR=101,ID_OUTPUT=102,ID_STATUS=103;
 static constexpr int ID_PROJECT_LIST=110, ID_AI_INPUT=111, ID_AI_LOG=112, ID_TABS=113, ID_PROBLEMS=114;
 static constexpr int ID_NEW=201,ID_OPEN=202,ID_SAVE=203,ID_SAVE_AS=204,ID_CHECK=205,ID_RUN=206,ID_BUILD=207,ID_BUILD_GUI=208,ID_STOP=209,ID_ABOUT=210,ID_FIND=211,ID_REPLACE=212,ID_NEXT=213,ID_PREVIOUS=214,ID_TOGGLE_COMMENT=215;
-static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238,ID_FORMAT_SPACE=239,ID_INDENT=240,ID_OUTDENT=241,ID_XRAY=242,ID_QUALITY_GATE=243,ID_CHECKPOINT=244,ID_RESTORE_CHECKPOINT=245,ID_FORGE=246;
+static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238,ID_FORMAT_SPACE=239,ID_INDENT=240,ID_OUTDENT=241,ID_XRAY=242,ID_QUALITY_GATE=243,ID_CHECKPOINT=244,ID_RESTORE_CHECKPOINT=245,ID_FORGE=246,ID_SHELL_MENU=247,ID_NAV_FILES=248,ID_NAV_SEARCH=249,ID_NAV_AI=250,ID_NAV_FOCUS=251,ID_NAV_OUTPUT=252,ID_VIEW_OUTPUT=253;
 static constexpr size_t MAX_FILE=4*1024*1024;
-static constexpr COLORREF SHELL_BG=RGB(17,21,28),PANEL_BG=RGB(26,32,41),EDIT_BG=RGB(20,25,33);
-static constexpr COLORREF FOREGROUND=RGB(235,239,245),MUTED=RGB(150,162,178),ACCENT=RGB(104,139,235);
+// Nova Studio 4.1 / Quiet Slate: muted sage accent, flat layered surfaces.
+static constexpr COLORREF SHELL_BG=RGB(13,16,19),PANEL_BG=RGB(25,29,33),EDIT_BG=RGB(19,23,27);
+static constexpr COLORREF FOREGROUND=RGB(237,240,239),MUTED=RGB(143,154,159),ACCENT=RGB(148,202,177);
+static constexpr COLORREF LINE=RGB(45,52,56),RAIL_BG=RGB(18,22,25),BAR_BG=RGB(19,23,27),SUB_BAR=RGB(23,27,30);
+static constexpr COLORREF SAGE_INK=RGB(17,33,25);
 // Windows CI diagnostics. Enabled only by --gui-smoke.
 // Each record is flushed immediately, so the last line survives a GUI callback crash.
 static bool gNovaGuiSmokeTrace=false;
@@ -124,6 +127,11 @@ class Studio{
   HWND btnAiAsk=nullptr,btnAiExplain=nullptr,btnAiFix=nullptr,btnAiCopy=nullptr;
   HWND btnSave=nullptr,btnRun=nullptr,btnCompile=nullptr,btnBuild=nullptr,btnStop=nullptr;
   HWND btnXray=nullptr,btnGate=nullptr,btnForge=nullptr;
+  HWND btnMenu=nullptr,navFiles=nullptr,navSearch=nullptr,navAi=nullptr,navFocus=nullptr,navOutput=nullptr;
+  HWND tooltips=nullptr;
+  HMENU appMenu=nullptr;
+  bool showOutputPanel=true;
+  HFONT brandFont=nullptr,metaFont=nullptr;
   HFONT font=nullptr,uiFont=nullptr,headingFont=nullptr;
   HBRUSH shellBrush=nullptr,panelBrush=nullptr,editBrush=nullptr;
   HACCEL accelerators=nullptr;HMODULE richLibrary=nullptr;
@@ -163,6 +171,14 @@ class Studio{
     return result;
   }
   static void applyFont(HWND h,HFONT f){if(h&&f)SendMessageW(h,WM_SETFONT,(WPARAM)f,TRUE);}
+  void tip(HWND control,LPCWSTR description){
+    if(!tooltips||!control)return;
+    TOOLINFOW item{};item.cbSize=sizeof(item);
+    item.uFlags=TTF_IDISHWND|TTF_SUBCLASS;
+    item.hwnd=mainWindow;item.uId=(UINT_PTR)control;
+    item.lpszText=const_cast<LPWSTR>(description);
+    SendMessageW(tooltips,TTM_ADDTOOLW,0,(LPARAM)&item);
+  }
   static LRESULT CALLBACK sidePaneCallback(HWND hwnd,UINT m,WPARAM w,LPARAM l){
     auto* self=(Studio*)GetWindowLongPtrW(hwnd,GWLP_USERDATA);
     if(m==WM_NCCREATE){self=(Studio*)((CREATESTRUCTW*)l)->lpCreateParams;
@@ -253,23 +269,43 @@ class Studio{
                          0,0,90,30,owner,(HMENU)(INT_PTR)id,GetModuleHandleW(nullptr),nullptr);
     applyFont(h,uiFont);return h;
   }
-  static void drawButton(const DRAWITEMSTRUCT* d){
+  void drawButton(const DRAWITEMSTRUCT* d){
     if(!d)return;
     RECT r=d->rcItem;
     const bool pressed=(d->itemState&ODS_SELECTED)!=0;
-    const bool primary=(d->CtlID==ID_RUN||d->CtlID==ID_AI_ASK);
-    const bool danger=(d->CtlID==ID_STOP);
-    COLORREF background=primary?ACCENT:(danger?RGB(90,49,58):RGB(43,52,65));
-    if(pressed)background=primary?RGB(70,107,201):RGB(55,65,79);
-    HBRUSH brush=CreateSolidBrush(background);
-    HPEN pen=CreatePen(PS_SOLID,1,background);
-    HGDIOBJ oldBrush=SelectObject(d->hDC,brush),oldPen=SelectObject(d->hDC,pen);
-    RoundRect(d->hDC,r.left,r.top,r.right,r.bottom,10,10);
+    const bool disabled=(d->itemState&ODS_DISABLED)!=0;
+    const bool primary=(d->CtlID==ID_RUN);
+    const bool rail=d->CtlID==ID_NAV_FILES||d->CtlID==ID_NAV_SEARCH||d->CtlID==ID_NAV_AI||
+      d->CtlID==ID_NAV_FOCUS||d->CtlID==ID_NAV_OUTPUT;
+    const bool search=d->CtlID==ID_QUICK_ACTIONS;
+    const bool danger=d->CtlID==ID_STOP;
+    const bool subtle=d->CtlID==ID_SHELL_MENU||d->CtlID==ID_TAB_CLOSE;
+    COLORREF bg=primary?ACCENT:(rail?RAIL_BG:(search?RGB(35,41,43):
+      (danger?RGB(59,41,43):(subtle?PANEL_BG:RGB(39,45,47)))));
+    if(pressed)bg=primary?RGB(121,176,152):RGB(55,63,65);
+    HBRUSH b=CreateSolidBrush(bg);
+    HGDIOBJ oldBrush=SelectObject(d->hDC,b);
+    HPEN outline=CreatePen(PS_SOLID,1,rail?RAIL_BG:(search?LINE:bg));
+    HGDIOBJ oldPen=SelectObject(d->hDC,outline);
+    RoundRect(d->hDC,r.left,r.top,r.right,r.bottom,12,12);
     SelectObject(d->hDC,oldBrush);SelectObject(d->hDC,oldPen);
-    DeleteObject(brush);DeleteObject(pen);
+    DeleteObject(b);DeleteObject(outline);
+    if(rail){
+      // Active tool indicator: a slim vertical sage mark at the activity rail's edge.
+      const bool active=!focusMode &&
+        ((d->CtlID==ID_NAV_FILES&&showProjectPanel)||
+         (d->CtlID==ID_NAV_AI&&showAiPanel)||
+         (d->CtlID==ID_NAV_OUTPUT&&showOutputPanel)) ||
+        (d->CtlID==ID_NAV_FOCUS&&focusMode);
+      if(active){RECT marker{r.left,r.top+8,r.left+3,r.bottom-8};
+        HBRUSH line=CreateSolidBrush(ACCENT);FillRect(d->hDC,&marker,line);DeleteObject(line);}
+    }
     wchar_t title[128]{};GetWindowTextW(d->hwndItem,title,128);
-    SetTextColor(d->hDC,FOREGROUND);SetBkMode(d->hDC,TRANSPARENT);
-    DrawTextW(d->hDC,title,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);
+    SetTextColor(d->hDC,disabled?MUTED:(primary?SAGE_INK:(danger?RGB(242,177,179):(rail?MUTED:FOREGROUND))));
+    SetBkMode(d->hDC,TRANSPARENT);
+    if(search){RECT textR=r;textR.left+=14;textR.right-=12;
+      DrawTextW(d->hDC,title,-1,&textR,DT_SINGLELINE|DT_LEFT|DT_VCENTER|DT_END_ELLIPSIS);}
+    else DrawTextW(d->hDC,title,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);
     if(d->itemState&ODS_FOCUS){RECT inner=r;InflateRect(&inner,-4,-4);DrawFocusRect(d->hDC,&inner);}
   }
   void drawTab(const DRAWITEMSTRUCT* d){
@@ -297,10 +333,53 @@ class Studio{
   }
   void paintShell(HWND h){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);
-    RECT all{};GetClientRect(h,&all);FillRect(dc,&all,shellBrush);
-    RECT head{0,0,all.right,58};FillRect(dc,&head,panelBrush);
-    HBRUSH stripe=CreateSolidBrush(ACCENT);
-    RECT edge{0,57,all.right,58};FillRect(dc,&edge,stripe);DeleteObject(stripe);
+    RECT full{};GetClientRect(h,&full);FillRect(dc,&full,shellBrush);
+    auto fill=[&](int x1,int y1,int x2,int y2,COLORREF color){
+      if(x2<=x1||y2<=y1)return;
+      RECT r{x1,y1,x2,y2};HBRUSH brush=CreateSolidBrush(color);
+      FillRect(dc,&r,brush);DeleteObject(brush);
+    };
+    const int w=full.right,hgt=full.bottom;
+    // A completely custom application surface; no default white Win32 menubar.
+    fill(0,0,w,64,BAR_BG);
+    fill(0,64,w,112,SUB_BAR);
+    fill(0,112,60,hgt-30,RAIL_BG);
+    fill(0,63,w,64,LINE);
+    fill(0,111,w,112,LINE);
+    fill(59,112,60,hgt-30,LINE);
+    // Separate pane surfaces make the new navigation architecture unmistakable.
+    const bool projectPanel=!focusMode&&showProjectPanel&&w>=950;
+    const bool assistantPanel=!focusMode&&showAiPanel&&w>=1220;
+    const int explorerWidth=projectPanel?std::clamp(w/5,198,250):0;
+    const int assistantWidth=assistantPanel?std::clamp(w/4,265,328):0;
+    const int explorerX=72;
+    const int editorX=72+(projectPanel?explorerWidth+12:0);
+    const int assistantX=assistantPanel?w-assistantWidth-12:0;
+    const int editorEnd=assistantPanel?assistantX-12:w-12;
+    if(projectPanel){
+      fill(explorerX-7,118,explorerX+explorerWidth+6,hgt-41,PANEL_BG);
+      fill(explorerX+explorerWidth+5,118,explorerX+explorerWidth+6,hgt-41,LINE);
+    }
+    fill(editorX-7,118,editorEnd+6,hgt-41,EDIT_BG);
+    if(assistantPanel){
+      fill(assistantX-6,118,assistantX+assistantWidth+6,hgt-41,PANEL_BG);
+      fill(assistantX-6,118,assistantX-5,hgt-41,LINE);
+    }
+    fill(0,hgt-30,w,hgt,BAR_BG);
+    fill(0,hgt-31,w,hgt-30,LINE);
+    // Brand block: two tier typographic lockup, not a traditional menu caption.
+    HFONT previous=(HFONT)SelectObject(dc,brandFont?brandFont:headingFont);
+    SetBkMode(dc,TRANSPARENT);SetTextColor(dc,FOREGROUND);
+    RECT brand{20,10,196,40};DrawTextW(dc,L"NOVA",-1,&brand,DT_SINGLELINE|DT_LEFT|DT_VCENTER);
+    SelectObject(dc,metaFont?metaFont:uiFont);SetTextColor(dc,ACCENT);
+    RECT edition{22,37,197,59};DrawTextW(dc,L"STUDIO  /  4.1",-1,&edition,DT_SINGLELINE|DT_LEFT|DT_VCENTER);
+    SelectObject(dc,previous);
+    SetTextColor(dc,MUTED);SelectObject(dc,metaFont?metaFont:uiFont);
+    RECT section{76,74,std::min(w,400),103};
+    DrawTextW(dc,L"WORKSPACE",-1,&section,DT_SINGLELINE|DT_LEFT|DT_VCENTER);
+    if(w>=680){RECT footer{12,hgt-30,w-14,hgt};
+      SetTextColor(dc,ACCENT);DrawTextW(dc,L"●  NOVA / LOCAL",-1,&footer,DT_SINGLELINE|DT_LEFT|DT_VCENTER);}
+    SelectObject(dc,previous);
     EndPaint(h,&ps);
   }
   void error(const std::wstring& s){MessageBoxW(mainWindow,s.c_str(),L"Nova Studio",MB_OK|MB_ICONERROR);}
@@ -364,8 +443,8 @@ class Studio{
     return true;
   }
   void setTitle(){auto name=file.empty()?L"Untitled.nova":file.filename().wstring();
-    SetWindowTextW(mainWindow,(name+(dirty?L" *":L"")+L" - Nova Studio 4.0").c_str());
-    if(editorTitle)SetWindowTextW(editorTitle,(L"EDITOR  /  "+name+(dirty?L"  •":L"")).c_str());
+    SetWindowTextW(mainWindow,(name+(dirty?L" *":L"")+L" - Nova Studio 4.1").c_str());
+    if(editorTitle)SetWindowTextW(editorTitle,(L"SOURCE  /  "+name+(dirty?L"  •":L"")).c_str());
   }
   void updateStatus(){
     if(!status||!editor)return;
@@ -782,73 +861,100 @@ class Studio{
   }
   void relayout(int w,int h){
     if(!editor)return;
-    // Adaptive three-pane workspace: hide panels when they cannot fit safely.
-    // View menu lets the user explicitly restore the panels after resizing.
-    const int pad=14,footer=28,bar=58;
-    const bool projectVisible=!focusMode&&showProjectPanel&&w>=1020;
-    const bool aiVisible=!focusMode&&showAiPanel&&w>=1280;
-    const int left=projectVisible?std::clamp(w/6,190,244):0;
-    const int right=aiVisible?std::clamp(w/4,264,330):0;
-    const int centerX=projectVisible?left+pad*2:pad;
+    // Nova Studio 4.1: a fixed activity rail, two-level command deck, and flexible canvas.
+    const int rail=60,pad=12,footer=30,topBar=64,commandBar=48;
+    const int workspaceTop=topBar+commandBar+12;
+    const int bottom=std::max(workspaceTop+200,h-footer-12);
+    const bool projectVisible=!focusMode&&showProjectPanel&&w>=950;
+    const bool aiVisible=!focusMode&&showAiPanel&&w>=1220;
+    const int left=projectVisible?std::clamp(w/5,198,250):0;
+    const int right=aiVisible?std::clamp(w/4,265,328):0;
+    const int leftX=rail+pad;
+    const int centerX=rail+pad+(projectVisible?left+pad:0);
     const int rightX=aiVisible?w-right-pad:0;
     const int centerRight=aiVisible?rightX-pad:w-pad;
-    const int centerWidth=std::max(230,centerRight-centerX);
-    const int top=bar+pad;
-    const int bottom=std::max(top+260,h-footer-pad);
-    const int outputHeight=std::max(145,std::min(230,(bottom-top)/3));
-    const int outputTop=bottom-outputHeight;
-    struct Item {HWND h;int size;};
-    const Item toolbar[]={{btnQuick,160},{btnProject,85},{btnForge,83},{btnSave,67},{btnRun,85},
-                          {btnXray,82},{btnGate,98},{btnDesigner,108},{btnCompile,88},
-                          {btnBuild,92},{btnStop,68}};
-    int x=pad;
-    for(const auto& item:toolbar){
-      if(!item.h)continue;
-      const bool fits=x+item.size<=w-pad;
-      ShowWindow(item.h,fits?SW_SHOW:SW_HIDE);
-      if(fits){MoveWindow(item.h,x,12,item.size,32,TRUE);x+=item.size+8;}
+    const int centerWidth=std::max(220,centerRight-centerX);
+    // Main command deck: brand/menu/search on the left, primary actions on the right.
+    if(btnMenu)MoveWindow(btnMenu,210,15,94,34,TRUE);
+    int saveX=w-324;
+    const bool narrow=w<900;
+    if(btnQuick)MoveWindow(btnQuick,320,15,std::max(150,std::min(380,saveX-334)),34,TRUE);
+    if(btnSave)MoveWindow(btnSave,w-316,15,87,34,TRUE);
+    if(btnBuild)MoveWindow(btnBuild,w-218,15,102,34,TRUE);
+    if(btnRun)MoveWindow(btnRun,w-106,15,94,34,TRUE);
+    if(btnQuick)ShowWindow(btnQuick,w>=735?SW_SHOW:SW_HIDE);
+    if(btnSave)ShowWindow(btnSave,narrow?SW_HIDE:SW_SHOW);
+    if(btnBuild)ShowWindow(btnBuild,narrow?SW_HIDE:SW_SHOW);
+    // Secondary toolbar is a deliberately separate action layer.
+    struct Item{HWND hwnd;int width;}; const Item actions[]={
+      {btnProject,104},{btnForge,110},{btnDesigner,129},{btnXray,108},
+      {btnGate,119},{btnCompile,106},{btnStop,82}};
+    int x=170;
+    for(const auto& a:actions){
+      if(!a.hwnd)continue;
+      const bool fits=x+a.width<w-12;
+      ShowWindow(a.hwnd,fits?SW_SHOW:SW_HIDE);
+      if(fits)MoveWindow(a.hwnd,x,72,a.width,32,TRUE);
+      x+=a.width+8;
     }
+    // Tool rail never disappears; every panel can be recovered from it.
+    struct Rail{HWND hwnd;int y;}; const Rail nav[]={
+      {navFiles,130},{navSearch,187},{navAi,244},{navFocus,301},{navOutput,358}};
+    for(const auto& item:nav)if(item.hwnd){
+      MoveWindow(item.hwnd,7,item.y,46,46,TRUE);
+      InvalidateRect(item.hwnd,nullptr,FALSE);
+    }
+    // Project pane.
     const HWND projectControls[]={projectTitle,projectSearch,projectList,searchHitsList};
     for(HWND control:projectControls)if(control)ShowWindow(control,projectVisible?SW_SHOW:SW_HIDE);
     if(projectVisible){
-      MoveWindow(projectTitle,pad,top,left,27,TRUE);
-      MoveWindow(projectSearch,pad,top+30,left,30,TRUE);
-      MoveWindow(projectList,pad,top+64,left,std::max(100,bottom-top-64),TRUE);
-      MoveWindow(searchHitsList,pad,top+64,left,std::max(100,bottom-top-64),TRUE);
+      MoveWindow(projectTitle,leftX,workspaceTop,left,27,TRUE);
+      MoveWindow(projectSearch,leftX,workspaceTop+39,left,35,TRUE);
+      MoveWindow(projectList,leftX,workspaceTop+84,left,std::max(90,bottom-workspaceTop-84),TRUE);
+      MoveWindow(searchHitsList,leftX,workspaceTop+84,left,std::max(90,bottom-workspaceTop-84),TRUE);
       ShowWindow(showingSearch?projectList:searchHitsList,SW_HIDE);
     }
-    MoveWindow(editorTitle,centerX,top,centerWidth-36,28,TRUE);
-    MoveWindow(btnTabClose,centerX+centerWidth-32,top,32,27,TRUE);
-    MoveWindow(tabs,centerX,top+30,centerWidth,33,TRUE);
-    const int gutterWidth=46,miniWidth=centerWidth<460?0:65;
-    const int editY=top+67,editH=std::max(100,outputTop-top-80);
+    // Tab strip / source canvas; console has its own optional region.
+    MoveWindow(editorTitle,centerX,workspaceTop,centerWidth-40,29,TRUE);
+    MoveWindow(btnTabClose,centerX+centerWidth-35,workspaceTop,34,29,TRUE);
+    MoveWindow(tabs,centerX,workspaceTop+37,centerWidth,34,TRUE);
+    const int editY=workspaceTop+78;
+    const int outputHeight=showOutputPanel&&!focusMode?std::clamp((bottom-editY)/3,160,232):0;
+    const int outputTop=bottom-outputHeight;
+    const int editH=std::max(90,outputTop-editY-(outputHeight?12:0));
+    const int gutterWidth=42,miniWidth=centerWidth<510?0:64;
     MoveWindow(gutter,centerX,editY,gutterWidth,editH,TRUE);
     MoveWindow(editor,centerX+gutterWidth,editY,std::max(120,centerWidth-gutterWidth-miniWidth),editH,TRUE);
     MoveWindow(miniMap,centerX+centerWidth-miniWidth,editY,miniWidth,editH,TRUE);
     ShowWindow(miniMap,miniWidth?SW_SHOW:SW_HIDE);
-    MoveWindow(outputTitle,centerX,outputTop,centerWidth,25,TRUE);
-    const int terminalTop=bottom-34;
-    MoveWindow(terminalInput,centerX,terminalTop,std::max(100,centerWidth-118),30,TRUE);
-    MoveWindow(btnTerminalSend,centerX+centerWidth-110,terminalTop,110,30,TRUE);
-    const int usable=std::max(58,terminalTop-outputTop-28);
-    if(diagnostics.empty()&&!showingXray){
-      MoveWindow(output,centerX,outputTop+28,centerWidth,usable,TRUE);
-      ShowWindow(problems,SW_HIDE);
-    }else{
-      const int problemHeight=std::min(95,usable/2);
-      MoveWindow(problems,centerX,outputTop+28,centerWidth,problemHeight,TRUE);
-      MoveWindow(output,centerX,outputTop+31+problemHeight,centerWidth,
-                 std::max(35,usable-problemHeight-3),TRUE);
-      ShowWindow(problems,SW_SHOW);
+    const HWND consoleControls[]={outputTitle,output,problems,terminalInput,btnTerminalSend};
+    for(HWND c:consoleControls)if(c)ShowWindow(c,outputHeight?SW_SHOW:SW_HIDE);
+    if(outputHeight){
+      MoveWindow(outputTitle,centerX,outputTop,centerWidth,27,TRUE);
+      const int terminalTop=bottom-36;
+      MoveWindow(terminalInput,centerX,terminalTop,std::max(100,centerWidth-122),31,TRUE);
+      MoveWindow(btnTerminalSend,centerX+centerWidth-115,terminalTop,115,31,TRUE);
+      const int usable=std::max(52,terminalTop-outputTop-34);
+      if(diagnostics.empty()&&!showingXray){
+        MoveWindow(output,centerX,outputTop+31,centerWidth,usable,TRUE);
+        ShowWindow(problems,SW_HIDE);
+      }else{
+        const int problemHeight=std::min(92,usable/2);
+        MoveWindow(problems,centerX,outputTop+31,centerWidth,problemHeight,TRUE);
+        MoveWindow(output,centerX,outputTop+34+problemHeight,centerWidth,
+                   std::max(32,usable-problemHeight-3),TRUE);
+        ShowWindow(problems,SW_SHOW);
+      }
     }
+    // AI inspector pane, deliberately contextual and hideable.
     const HWND aiControls[]={aiTitle,aiLog,aiInput,btnAiAsk,btnAiExplain,btnAiFix,btnAiCopy,
                              btnAiPreview,btnAiProject,btnAiMulti,aiPrivacy};
     for(HWND control:aiControls)if(control)ShowWindow(control,aiVisible?SW_SHOW:SW_HIDE);
     if(aiVisible){
-      MoveWindow(aiTitle,rightX,top,right-2,28,TRUE);
-      const int hintHeight=62,btnHeight=32,promptHeight=70;
-      const int promptY=bottom-hintHeight-btnHeight*5-promptHeight-44;
-      MoveWindow(aiLog,rightX,top+32,right,std::max(80,promptY-top-41),TRUE);
+      MoveWindow(aiTitle,rightX,workspaceTop,right,28,TRUE);
+      const int hintHeight=56,btnHeight=32,promptHeight=70;
+      const int promptY=std::max(workspaceTop+120,bottom-hintHeight-btnHeight*5-promptHeight-38);
+      MoveWindow(aiLog,rightX,workspaceTop+37,right,std::max(60,promptY-workspaceTop-47),TRUE);
       MoveWindow(aiInput,rightX,promptY,right,promptHeight,TRUE);
       MoveWindow(btnAiAsk,rightX,promptY+promptHeight+6,(right-8)/2,btnHeight,TRUE);
       MoveWindow(btnAiExplain,rightX+(right+8)/2,promptY+promptHeight+6,(right-8)/2,btnHeight,TRUE);
@@ -859,7 +965,9 @@ class Studio{
       MoveWindow(btnAiMulti,rightX,promptY+promptHeight+btnHeight*4+23,right,btnHeight,TRUE);
       MoveWindow(aiPrivacy,rightX,promptY+promptHeight+btnHeight*5+27,right,hintHeight,TRUE);
     }
-    MoveWindow(status,pad,std::max(0,h-footer),std::max(150,w-2*pad),footer,TRUE);
+    // Status starts after the permanent product mark in the footer.
+    MoveWindow(status,185,std::max(0,h-footer),std::max(100,w-198),footer,TRUE);
+    InvalidateRect(mainWindow,nullptr,FALSE);
   }
   void refreshLayout(){RECT r{};GetClientRect(mainWindow,&r);relayout(r.right-r.left,r.bottom-r.top);}
   struct AiResult{bool ok=false;std::wstring answer;};
@@ -1741,12 +1849,14 @@ class Studio{
     if(findMessage && m==findMessage){onSearchMessage((FINDREPLACEW*)l);return 0;}
     if(m==WM_CREATE){
       mainWindow=h;
-      INITCOMMONCONTROLSEX icc{sizeof(icc),ICC_TAB_CLASSES};InitCommonControlsEx(&icc);
+      INITCOMMONCONTROLSEX icc{sizeof(icc),ICC_TAB_CLASSES|ICC_BAR_CLASSES};InitCommonControlsEx(&icc);
       novaTrace("CREATE_BEGIN");
       shellBrush=CreateSolidBrush(SHELL_BG);panelBrush=CreateSolidBrush(PANEL_BG);editBrush=CreateSolidBrush(EDIT_BG);
       uiFont=CreateFontW(-16,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
       headingFont=CreateFontW(-17,0,0,0,FW_SEMIBOLD,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
-      font=CreateFontW(-18,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,FIXED_PITCH,L"Cascadia Code");
+      font=CreateFontW(-19,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,FIXED_PITCH,L"Cascadia Code");
+      brandFont=CreateFontW(-25,0,0,0,FW_BOLD,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+      metaFont=CreateFontW(-12,0,0,0,FW_SEMIBOLD,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
       richLibrary=LoadLibraryW(L"Msftedit.dll");richEdit=richLibrary!=nullptr;
       editor=CreateWindowExW(0,richEdit?L"RICHEDIT50W":L"EDIT",L"",
                     WS_VISIBLE|WS_CHILD|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN|ES_NOHIDESEL,
@@ -1760,7 +1870,7 @@ class Studio{
                              0,0,100,100,h,(HMENU)ID_OUTPUT,GetModuleHandleW(nullptr),nullptr);
       projectList=CreateWindowExW(0,L"LISTBOX",L"",WS_VISIBLE|WS_CHILD|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT,
                              0,0,100,100,h,(HMENU)ID_PROJECT_LIST,GetModuleHandleW(nullptr),nullptr);
-      projectSearch=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_VISIBLE|WS_CHILD|ES_AUTOHSCROLL,
+      projectSearch=CreateWindowExW(0,L"EDIT",L"",WS_VISIBLE|WS_CHILD|ES_AUTOHSCROLL,
                              0,0,100,30,h,(HMENU)(INT_PTR)(ID_PROJECT_SEARCH+100),GetModuleHandleW(nullptr),nullptr);
       searchHitsList=CreateWindowExW(0,L"LISTBOX",L"",WS_CHILD|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT,
                              0,0,100,100,h,(HMENU)(INT_PTR)(ID_PROJECT_SEARCH+101),GetModuleHandleW(nullptr),nullptr);
@@ -1772,24 +1882,30 @@ class Studio{
       miniMap=CreateWindowW(pane.lpszClassName,L"",WS_VISIBLE|WS_CHILD,0,0,80,150,h,nullptr,pane.hInstance,this);
       aiLog=CreateWindowExW(0,L"EDIT",L"",WS_VISIBLE|WS_CHILD|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_READONLY,
                              0,0,100,100,h,(HMENU)ID_AI_LOG,GetModuleHandleW(nullptr),nullptr);
-      aiInput=CreateWindowExW(0,L"EDIT",L"",WS_VISIBLE|WS_CHILD|WS_BORDER|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN,
+      aiInput=CreateWindowExW(0,L"EDIT",L"",WS_VISIBLE|WS_CHILD|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN,
                              0,0,100,100,h,(HMENU)ID_AI_INPUT,GetModuleHandleW(nullptr),nullptr);
       tabs=CreateWindowExW(0,WC_TABCONTROLW,L"",WS_VISIBLE|WS_CHILD|TCS_OWNERDRAWFIXED|TCS_TOOLTIPS|TCS_FIXEDWIDTH,
                          0,0,100,33,h,(HMENU)ID_TABS,GetModuleHandleW(nullptr),nullptr);
       problems=CreateWindowExW(0,L"LISTBOX",L"",WS_CHILD|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT,
                           0,0,100,80,h,(HMENU)ID_PROBLEMS,GetModuleHandleW(nullptr),nullptr);
-      terminalInput=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_VISIBLE|WS_CHILD|ES_AUTOHSCROLL,
+      terminalInput=CreateWindowExW(0,L"EDIT",L"",WS_VISIBLE|WS_CHILD|ES_AUTOHSCROLL,
                            0,0,100,30,h,(HMENU)ID_TERMINAL_SEND+100,GetModuleHandleW(nullptr),nullptr);
-      status=newLabel(h,L"Ready");projectTitle=newLabel(h,L"PROJECT  /  No folder");
+      status=newLabel(h,L"Ready");projectTitle=newLabel(h,L"EXPLORER  /  No folder");
       editorTitle=newLabel(h,L"EDITOR  /  Untitled.nova");
-      outputTitle=newLabel(h,L"OUTPUT / PROBLEMS  |  type below to answer ask");aiTitle=newLabel(h,L"AI ASSISTANT  •  OPENAI");
+      outputTitle=newLabel(h,L"TERMINAL  /  OUTPUT & DIAGNOSTICS");aiTitle=newLabel(h,L"ASSISTANT  /  AI STUDIO");
       aiPrivacy=newLabel(h,L"AI sends sources only with approval.\nProject changes need review + compile; key not saved.");
-      btnProject=newButton(h,L"Project",ID_PROJECT_OPEN);btnOpen=newButton(h,L"Open",ID_OPEN);
+      btnMenu=newButton(h,L"≡  Menu",ID_SHELL_MENU);
+      navFiles=newButton(h,L"EX",ID_NAV_FILES);
+      navSearch=newButton(h,L"⌕",ID_NAV_SEARCH);
+      navAi=newButton(h,L"AI",ID_NAV_AI);
+      navFocus=newButton(h,L"▣",ID_NAV_FOCUS);
+      navOutput=newButton(h,L">_",ID_NAV_OUTPUT);
+      btnProject=newButton(h,L"Open folder",ID_PROJECT_OPEN);btnOpen=newButton(h,L"Open",ID_OPEN);
       btnSave=newButton(h,L"Save",ID_SAVE);btnRun=newButton(h,L"▶  Run F5",ID_RUN);
       btnCompile=newButton(h,L"Compile",ID_CHECK);btnBuild=newButton(h,L"Build EXE",ID_BUILD);
-      btnStop=newButton(h,L"Stop",ID_STOP);btnQuick=newButton(h,L"⌕  Command Center",ID_QUICK_ACTIONS);
-      btnXray=newButton(h,L"X-Ray",ID_XRAY);btnGate=newButton(h,L"Quality Gate",ID_QUALITY_GATE);
-      btnForge=newButton(h,L"+ Forge",ID_FORGE);
+      btnStop=newButton(h,L"Stop",ID_STOP);btnQuick=newButton(h,L"⌕  Search anything     Ctrl+Shift+P",ID_QUICK_ACTIONS);
+      btnXray=newButton(h,L"Project X-Ray",ID_XRAY);btnGate=newButton(h,L"Quality Gate",ID_QUALITY_GATE);
+      btnForge=newButton(h,L"+ New app",ID_FORGE);
       btnAiAsk=newButton(h,L"Ask AI",ID_AI_ASK);btnAiExplain=newButton(h,L"Explain code",ID_AI_EXPLAIN);
       btnAiFix=newButton(h,L"Fix code",ID_AI_FIX);btnAiCopy=newButton(h,L"Copy answer",ID_AI_COPY);
       btnAiPreview=newButton(h,L"AI Proof: Verify / Apply",ID_AI_PREVIEW);
@@ -1803,6 +1919,16 @@ class Studio{
       applyFont(projectList,uiFont);applyFont(projectSearch,uiFont);applyFont(searchHitsList,uiFont);
       applyFont(problems,uiFont);applyFont(tabs,uiFont);applyFont(terminalInput,uiFont);
       TabCtrl_SetItemSize(tabs,162,30);
+      const HWND railButtons[]={btnMenu,navFiles,navSearch,navAi,navFocus,navOutput};
+      for(HWND control:railButtons)applyFont(control,uiFont);
+      tooltips=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,L"",WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,
+        CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,h,nullptr,GetModuleHandleW(nullptr),nullptr);
+      tip(navFiles,L"Explorer  /  Toggle files");
+      tip(navSearch,L"Search in project");
+      tip(navAi,L"AI Assistant  /  Toggle panel");
+      tip(navFocus,L"Focus mode  /  Ctrl+Shift+E");
+      tip(navOutput,L"Console & diagnostics  /  Ctrl+J");
+      tip(btnQuick,L"Search commands, files, and symbols  /  Ctrl+Shift+P");
       applyFont(projectTitle,headingFont);applyFont(editorTitle,headingFont);
       applyFont(outputTitle,headingFont);applyFont(aiTitle,headingFont);applyFont(status,uiFont);applyFont(aiPrivacy,uiFont);
       if(richEdit){SendMessageW(editor,EM_EXLIMITTEXT,0,(LPARAM)MAX_FILE);
@@ -1819,7 +1945,7 @@ class Studio{
       novaTrace("OUTPUT_AND_STATUS_CREATED");
       novaTrace("AFTER_DEFAULT_SOURCE");
       findMessage=RegisterWindowMessageW(FINDMSGSTRINGW);
-      HMENU menu=CreateMenu(),files=CreatePopupMenu(),edit=CreatePopupMenu(),nova=CreatePopupMenu(),aiMenu=CreatePopupMenu(),view=CreatePopupMenu();
+      HMENU menu=CreatePopupMenu(),files=CreatePopupMenu(),edit=CreatePopupMenu(),nova=CreatePopupMenu(),aiMenu=CreatePopupMenu(),view=CreatePopupMenu();
       AppendMenuW(files,MF_STRING,ID_NEW,L"New\tCtrl+N");AppendMenuW(files,MF_STRING,ID_OPEN,L"Open\tCtrl+O");
       AppendMenuW(files,MF_STRING,ID_PROJECT_OPEN,L"Open project folder...");
       AppendMenuW(files,MF_STRING,ID_FORGE,L"Nova Forge: New project from blueprint...");
@@ -1863,13 +1989,16 @@ class Studio{
       AppendMenuW(view,MF_STRING|MF_CHECKED,ID_VIEW_PROJECT,L"Project sidebar");
       AppendMenuW(view,MF_STRING|MF_CHECKED,ID_VIEW_AI,L"AI sidebar");
       AppendMenuW(view,MF_STRING,ID_VIEW_FOCUS,L"Focus mode\tCtrl+Shift+E");
+      AppendMenuW(view,MF_STRING|MF_CHECKED,ID_VIEW_OUTPUT,L"Bottom console\tCtrl+J");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)files,L"File");AppendMenuW(menu,MF_POPUP,(UINT_PTR)edit,L"Edit");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)view,L"View");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)nova,L"Nova");AppendMenuW(menu,MF_POPUP,(UINT_PTR)aiMenu,L"AI");
-      AppendMenuW(menu,MF_STRING,ID_ABOUT,L"About");SetMenu(h,menu);DragAcceptFiles(h,TRUE);setTitle();
+      AppendMenuW(menu,MF_STRING,ID_ABOUT,L"About Nova Studio");
+      appMenu=menu; // Kept as a popup, not attached as an OS menu bar.
+      DragAcceptFiles(h,TRUE);setTitle();
       novaTrace("CREATE_COMPLETE");return 0;
     }
-    if(m==WM_GETMINMAXINFO){auto* info=(MINMAXINFO*)l;info->ptMinTrackSize={980,650};return 0;}
+    if(m==WM_GETMINMAXINFO){auto* info=(MINMAXINFO*)l;info->ptMinTrackSize={820,620};return 0;}
     if(m==WM_PAINT){paintShell(h);return 0;}
     if(m==WM_ERASEBKGND)return 1;
     if(m==WM_DRAWITEM){auto* item=(DRAWITEMSTRUCT*)l;
@@ -1943,11 +2072,26 @@ class Studio{
       if(LOWORD(w)==ID_PROBLEMS&&HIWORD(w)==LBN_DBLCLK){goToProblem();return 0;}
       switch(LOWORD(w)){
         case ID_VIEW_PROJECT:showProjectPanel=!showProjectPanel;focusMode=false;
-          CheckMenuItem(GetMenu(mainWindow),ID_VIEW_PROJECT,MF_BYCOMMAND|(showProjectPanel?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
+          CheckMenuItem(appMenu,ID_VIEW_PROJECT,MF_BYCOMMAND|(showProjectPanel?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
         case ID_VIEW_AI:showAiPanel=!showAiPanel;focusMode=false;
-          CheckMenuItem(GetMenu(mainWindow),ID_VIEW_AI,MF_BYCOMMAND|(showAiPanel?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
+          CheckMenuItem(appMenu,ID_VIEW_AI,MF_BYCOMMAND|(showAiPanel?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
         case ID_VIEW_FOCUS:focusMode=!focusMode;
-          CheckMenuItem(GetMenu(mainWindow),ID_VIEW_FOCUS,MF_BYCOMMAND|(focusMode?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
+          CheckMenuItem(appMenu,ID_VIEW_FOCUS,MF_BYCOMMAND|(focusMode?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
+        case ID_VIEW_OUTPUT:showOutputPanel=!showOutputPanel;
+          CheckMenuItem(appMenu,ID_VIEW_OUTPUT,MF_BYCOMMAND|(showOutputPanel?MF_CHECKED:MF_UNCHECKED));
+          refreshLayout();break;
+        case ID_SHELL_MENU:{
+          if(appMenu && btnMenu){RECT bounds{};GetWindowRect(btnMenu,&bounds);
+            SetForegroundWindow(mainWindow);
+            TrackPopupMenu(appMenu,TPM_LEFTALIGN|TPM_TOPALIGN|TPM_RIGHTBUTTON,bounds.left,bounds.bottom+4,0,mainWindow,nullptr);
+            PostMessageW(mainWindow,WM_NULL,0,0);
+          }break;
+        }
+        case ID_NAV_FILES:SendMessageW(h,WM_COMMAND,ID_VIEW_PROJECT,0);break;
+        case ID_NAV_SEARCH:showProjectPanel=true;focusMode=false;refreshLayout();focusProjectSearch();break;
+        case ID_NAV_AI:SendMessageW(h,WM_COMMAND,ID_VIEW_AI,0);break;
+        case ID_NAV_FOCUS:SendMessageW(h,WM_COMMAND,ID_VIEW_FOCUS,0);break;
+        case ID_NAV_OUTPUT:SendMessageW(h,WM_COMMAND,ID_VIEW_OUTPUT,0);break;
         case ID_NEW:newDocument();break;
         case ID_OPEN:openFile();break;case ID_SAVE:saveFile(false);break;case ID_SAVE_AS:saveFile(true);break;
         case ID_FIND:openSearch(false);break;case ID_REPLACE:openSearch(true);break;
@@ -1980,7 +2124,7 @@ class Studio{
         case ID_BUILD:start(Action::Build);break;case ID_BUILD_GUI:start(Action::BuildGui);break;
         case ID_STOP:if(busy)stop();break;
         case ID_TERMINAL_SEND:sendTerminalInput();break;
-        case ID_ABOUT:MessageBoxW(h,L"Nova Studio 4.0 Preview\nNova Forge, Command Center, Project X-Ray, Quality Gate, Time Machine, AI Proof and App Designer.\nOffline tools never transmit code; AI requires explicit consent and review.",L"About",MB_OK);break;
+        case ID_ABOUT:MessageBoxW(h,L"Nova Studio 4.1 Visual Refresh\nNova Forge, Command Center, Project X-Ray, Quality Gate, Time Machine, AI Proof and App Designer.\nOffline tools never transmit code; AI requires explicit consent and review.",L"About",MB_OK);break;
       }return 0;
     }
     if(m==WM_NOTIFY && l){
@@ -2096,6 +2240,7 @@ class Studio{
     if(m==WM_CLOSE){if(closeAllDocuments())DestroyWindow(h);return 0;}
     if(m==WM_DESTROY){
       if(paletteWindow){DestroyWindow(paletteWindow);paletteWindow=nullptr;}
+      if(tooltips){DestroyWindow(tooltips);tooltips=nullptr;}
       // Child windows (including RichEdit) still exist at this point.
       // Do NOT unload Msftedit.dll or destroy the shared font here.
       KillTimer(h,HIGHLIGHT_TIMER);KillTimer(h,PROJECT_SEARCH_TIMER);
@@ -2122,6 +2267,9 @@ class Studio{
       // Unloading RichEdit earlier can crash its window procedure (0xC000041D).
       if(font){DeleteObject(font);font=nullptr;}
       if(uiFont){DeleteObject(uiFont);uiFont=nullptr;}
+      if(brandFont){DeleteObject(brandFont);brandFont=nullptr;}
+      if(metaFont){DeleteObject(metaFont);metaFont=nullptr;}
+      if(appMenu){DestroyMenu(appMenu);appMenu=nullptr;}
       if(headingFont){DeleteObject(headingFont);headingFont=nullptr;}
       if(shellBrush){DeleteObject(shellBrush);shellBrush=nullptr;}
       if(panelBrush){DeleteObject(panelBrush);panelBrush=nullptr;}
@@ -2142,15 +2290,15 @@ public:
     runtime=root/L"bin"/L"nova-native.exe";windowed=root/L"bin"/L"nova-windowed.exe";
     compiler=root/L"compiler"/L"novac_selfhost.nbc";
     WNDCLASSW wc{};wc.hInstance=instance;wc.lpfnWndProc=callback;wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
-    wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);wc.lpszClassName=L"NovaStudioNextWindow";
+    wc.hbrBackground=(HBRUSH)GetStockObject(BLACK_BRUSH);wc.lpszClassName=L"NovaStudioNextWindow";
     if(!RegisterClassW(&wc))return 2;
-    mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio 4",WS_OVERLAPPEDWINDOW,
+    mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio 4.1",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,
                               CW_USEDEFAULT,CW_USEDEFAULT,1370,850,nullptr,nullptr,instance,this);
     if(!mainWindow)return 2;
     darkTitlebar(mainWindow);
     ACCEL bindings[]={{FVIRTKEY|FCONTROL,'N',ID_NEW},{FVIRTKEY|FCONTROL,'O',ID_OPEN},{FVIRTKEY|FCONTROL,'S',ID_SAVE},
                        {FVIRTKEY|FCONTROL,'W',ID_TAB_CLOSE},{FVIRTKEY|FCONTROL,VK_TAB,ID_TAB_NEXT},
-                       {FVIRTKEY|FCONTROL,VK_SPACE,ID_COMPLETE},{FVIRTKEY|FCONTROL,'F',ID_FIND},{FVIRTKEY|FCONTROL,'H',ID_REPLACE},{FVIRTKEY|FCONTROL,'K',ID_TOGGLE_COMMENT},{FVIRTKEY|FCONTROL,VK_OEM_6,ID_INDENT},{FVIRTKEY|FCONTROL,VK_OEM_4,ID_OUTDENT},{FVIRTKEY|FCONTROL|FSHIFT,'P',ID_QUICK_ACTIONS},{FVIRTKEY|FCONTROL|FSHIFT,'O',ID_SYMBOLS},{FVIRTKEY|FCONTROL|FSHIFT,'F',ID_PROJECT_SEARCH},{FVIRTKEY|FCONTROL|FSHIFT,'E',ID_VIEW_FOCUS},{FVIRTKEY|FCONTROL,VK_RETURN,ID_TERMINAL_SEND},
+                       {FVIRTKEY|FCONTROL,VK_SPACE,ID_COMPLETE},{FVIRTKEY|FCONTROL,'F',ID_FIND},{FVIRTKEY|FCONTROL,'H',ID_REPLACE},{FVIRTKEY|FCONTROL,'K',ID_TOGGLE_COMMENT},{FVIRTKEY|FCONTROL,VK_OEM_6,ID_INDENT},{FVIRTKEY|FCONTROL,VK_OEM_4,ID_OUTDENT},{FVIRTKEY|FCONTROL|FSHIFT,'P',ID_QUICK_ACTIONS},{FVIRTKEY|FCONTROL|FSHIFT,'O',ID_SYMBOLS},{FVIRTKEY|FCONTROL|FSHIFT,'F',ID_PROJECT_SEARCH},{FVIRTKEY|FCONTROL|FSHIFT,'E',ID_VIEW_FOCUS},{FVIRTKEY|FCONTROL,'J',ID_VIEW_OUTPUT},{FVIRTKEY|FCONTROL,VK_RETURN,ID_TERMINAL_SEND},
                        {FVIRTKEY,VK_F3,ID_NEXT},{FVIRTKEY|FSHIFT,VK_F3,ID_PREVIOUS},
                        {FVIRTKEY,VK_F5,ID_RUN},{FVIRTKEY,VK_F6,ID_CHECK},{FVIRTKEY,VK_F7,ID_BUILD},{FVIRTKEY|FSHIFT,VK_F5,ID_STOP}};
     accelerators=CreateAcceleratorTableW(bindings,(int)(sizeof(bindings)/sizeof(bindings[0])));
@@ -2169,9 +2317,27 @@ public:
            !IsWindow(btnSave)||!IsWindow(btnRun)||!IsWindow(btnCompile)||!IsWindow(btnBuild)||!IsWindow(btnStop)||
            !IsWindow(projectList)||!IsWindow(aiLog)||!IsWindow(aiInput)||!IsWindow(btnAiAsk)||
            !IsWindow(btnForge)||!IsWindow(btnXray)||!IsWindow(btnGate)||
+           !IsWindow(btnMenu)||!IsWindow(navFiles)||!IsWindow(navAi)||!IsWindow(navOutput)||
            !IsWindow(tabs)||!IsWindow(problems)||!IsWindow(btnTabClose)||!IsWindow(btnAiPreview)||
            !IsWindow(btnDesigner)||!IsWindow(terminalInput)||!IsWindow(btnTerminalSend)||!IsWindow(btnAiProject)||
            !IsWindow(miniMap)||!IsWindow(gutter)||!IsWindow(projectSearch)||!IsWindow(btnAiMulti))result=21;
+        // Verify this is the redesigned 4.1 shell, not the legacy native Windows menu.
+        if(!result && (GetMenu(mainWindow)!=nullptr || !appMenu))result=41;
+        if(!result){
+          RECT menuRect{},railRect{},sourceRect{};
+          GetWindowRect(btnMenu,&menuRect);
+          GetWindowRect(navFiles,&railRect);
+          GetWindowRect(editor,&sourceRect);
+          if(menuRect.top>=railRect.top || railRect.left>=sourceRect.left)result=42;
+        }
+        if(!result){
+          novaTrace("SMOKE_VISUAL_SHELL");
+          const bool previous=showOutputPanel;
+          SendMessageW(mainWindow,WM_COMMAND,MAKEWPARAM(ID_VIEW_OUTPUT,0),0);
+          if(showOutputPanel==previous || IsWindowVisible(output))result=43;
+          SendMessageW(mainWindow,WM_COMMAND,MAKEWPARAM(ID_VIEW_OUTPUT,0),0);
+          if(showOutputPanel!=previous || !IsWindowVisible(output))result=44;
+        }
         if(!result){
           loading=true;
           if(!SetWindowTextW(editor,L"покажи \"Київ Łódź\"\r\n"))result=22;

@@ -1,3 +1,13 @@
+# Nova Studio 4.1 — Visual Redesign (Windows preview)
+
+**NEW IN 4.1:** The application shell is replaced in the real Win32 Studio source: custom two-tier command deck, permanent activity rail, Explorer/Source/AI panels, Quiet Slate dark surfaces and collapsible console (`Ctrl+J`). The old permanent native Windows menu bar is removed; full menus are available in `≡ Menu`.
+
+See [NOVA_STUDIO_4_1_VISUAL_UA.md](NOVA_STUDIO_4_1_VISUAL_UA.md) for detailed Ukrainian notes, verification status and installation instructions. `design/CONCEPT_PREVIEW.html` is an **illustrative mockup, not an actual Windows screenshot**.
+
+**Verification boundary:** 10/10 portable C++ tests and 4/4 shell-integration checks pass on Linux. **Windows 4.1 executable and visual behavior have not been tested here.** Build and GUI smoke test through GitHub Actions before release.
+
+---
+
 **NOVA STUDIO 4.0 HYPER PREVIEW:** new Command Center (`Ctrl+Shift+P`), Nova Forge (three local application blueprints), offline Project X-Ray, compile-only project Quality Gate, and per-file Time Machine checkpoints with safe restore. Includes a fix for standalone compilation after Update 24. **Windows build/UI not yet verified.** Read [Ukrainian release guide](NOVA_STUDIO_4_HYPER_UA.md).
 
 **Nova Studio 3.0 Preview — Update 19:** preserved restrained dark theme (no cyberpunk redesign), with minimap, line numbers, current-line highlight, smarter completion, function navigation (Ctrl+Shift+O), project search (Ctrl+Shift+F), bounded project-aware AI multi-file proposal + compile-only verification, and App Designer snapping/grid/properties/templates/native preview. Read [Ukrainian guide](NOVA_STUDIO_3_UPDATE_19_UA.md). Windows MSVC/GUI verification still required.
