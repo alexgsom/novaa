@@ -14,6 +14,23 @@ inline void move(nova_designer15::Form& form,size_t index,int x,int y,bool grid=
 inline void resize(nova_designer15::Form& form,size_t index,int w,int h,bool grid=true){
   form.resize(index,grid?snap(w,10):w,grid?snap(h,10):h);
 }
+// Precise alignment and duplication are deterministic and validated by Form.
+inline void centerHorizontally(nova_designer15::Form& form,size_t index){
+  if(index>=form.widgets.size())throw std::out_of_range("Unknown widget");
+  auto& widget=form.widgets[index];form.move(index,(form.width-widget.w)/2,widget.y);
+}
+inline void centerVertically(nova_designer15::Form& form,size_t index){
+  if(index>=form.widgets.size())throw std::out_of_range("Unknown widget");
+  auto& widget=form.widgets[index];form.move(index,widget.x,(form.height-widget.h)/2);
+}
+inline size_t duplicate(nova_designer15::Form& form,size_t index){
+  if(index>=form.widgets.size())throw std::out_of_range("Unknown widget");
+  if(form.widgets.size()>=32)throw std::length_error("32 widgets maximum");
+  const auto source=form.widgets[index];
+  form.widgets.push_back(source);
+  form.move(form.widgets.size()-1,source.x+20,source.y+20);
+  return form.widgets.size()-1;
+}
 enum class Template { Login, Feedback, Dashboard };
 inline nova_designer15::Form starter(Template preset){
   using namespace nova_designer15;

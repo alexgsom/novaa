@@ -38,5 +38,20 @@ int main(){
   int whileKw=0;
   for(auto t:w)if(t.kind==Kind::Keyword)++whileKw;
   CHECK(whileKw==3);
+  // Update 21: non-destructive whitespace cleanup and multi-line indentation.
+  auto cleaned=cleanTrailingWhitespace(L"show 1  \r\n  show 2\t\n\n");
+  CHECK(cleaned.text==L"show 1\r\n  show 2\n\n"&&cleaned.count==2);
+  CHECK(cleanTrailingWhitespace(L"x  ").text==L"x");
+  CHECK(cleanTrailingWhitespace(L"a\n").text==L"a\n");
+  CHECK(cleanTrailingWhitespace(L"  x\n").text==L"  x\n");
+  CHECK(cleanTrailingWhitespace(L"").text.empty());
+  try{cleanTrailingWhitespace(L"too long",3);CHECK(false);}catch(const std::length_error&){}
+  auto ind=indentLines(L"show 1\r\n\r\nshow 2\r\n",0,18,false);
+  CHECK(ind.changed&&ind.replacement==L"    show 1\r\n\r\n    show 2\r\n");
+  auto unind=indentLines(ind.replacement,0,ind.replacement.size(),true);
+  CHECK(unind.replacement==L"show 1\r\n\r\nshow 2\r\n");
+  CHECK(indentLines(L"\tshow 1\n",0,0,true).replacement==L"show 1\n");
+  CHECK(!indentLines(L"show 1\n",0,0,true).changed);
+  try{indentLines(L"a\n",0,0,false,3);CHECK(false);}catch(const std::length_error&){}
   std::wcout<<L"nova studio text helpers: PASS\n";
 }

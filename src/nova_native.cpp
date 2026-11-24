@@ -914,7 +914,7 @@ static string readFile(const string& filename){
 }
 static void usage(){cout<<"Nova Native 0.9 (Windows-first, C++17, self-hosted GUI bytecode)\n"
   <<"Usage:\n  nova-native run file.nova [--lang uk|pl|en] [--max-steps N] [-- app_args...]\n"
-  <<"  nova-native check file.nova\n  nova-native exec file.nbc [--max-steps N] [-- app_args...]\n"
+  <<"  nova-native check file.nova\n  nova-native exec file.nbc [--max-steps N] [--trace-steps 1..10000] [-- app_args...]\n"
   <<"  nova-native pack file.nbc App.exe [--runtime nova-native.exe] [--force]\n"
   <<"  nova-native inspect App.exe\n  nova-native unpack App.exe output.nbc [--force]\n  nova-native --version\n"
   <<"Modules: storage, system, json, text, lists, sqlite, http, ui (Win32 only), local .nova imports.\n"
@@ -946,6 +946,7 @@ static int novaMain(const vector<string>& args) {
       else {forward=true;appArgs.push_back(arg);}
     }
     if(lang!="en"&&lang!="uk"&&lang!="pl")throw NovaError("--lang must be en, uk or pl");
+    if(traceSteps&&mode!="exec")throw NovaError("--trace-steps is supported for exec .nbc only");
     if(maxSteps<1||maxSteps>100000000)throw NovaError("--max-steps must be 1..100000000");
     Runtime runtime(lang,maxSteps,appArgs);
     runtime.run(string(reinterpret_cast<const char*>(NOVA_EMBEDDED_CODE),NOVA_EMBEDDED_LENGTH),"main.nova");
@@ -1002,7 +1003,7 @@ static int novaMain(const vector<string>& args) {
       cout<<"UNPACKED: "<<destination.u8string()<<"\n";return 0;
     }
     if(args.size()<2){usage();return 2;}
-    string mode=args[1],file,lang="en";long long maxSteps=100000;vector<string> appArgs;bool forward=false;
+    string mode=args[1],file,lang="en";long long maxSteps=100000;size_t traceSteps=0;vector<string> appArgs;bool forward=false;
     if(mode=="--help"||mode=="-h"||mode=="--version"){usage();return 0;}
     if(mode!="run"&&mode!="check"&&mode!="exec"){mode="run";file=args[1];}
     for(size_t i=2;i<args.size();++i){const string& arg=args[i];
@@ -1010,14 +1011,20 @@ static int novaMain(const vector<string>& args) {
       if(arg=="--"){forward=true;continue;}
       if(arg=="--lang"&&i+1<args.size())lang=args[++i];
       else if(arg=="--max-steps"&&i+1<args.size()){try{maxSteps=stoll(args[++i]);}catch(...){throw NovaError("Invalid --max-steps value");}}
+      else if(arg=="--trace-steps"&&i+1<args.size()){
+        try{auto value=stoll(args[++i]);if(value<1||value>10000)throw std::out_of_range("trace");
+          traceSteps=(size_t)value;}
+        catch(...){throw NovaError("--trace-steps must be 1..10000");}
+      }
       else if(file.empty())file=arg;
       else throw NovaError("Unknown argument: "+arg);
     }
     if(file.empty()||file.size()<(mode=="exec"?4u:5u)||file.substr(file.size()-(mode=="exec"?4:5))!=(mode=="exec"?".nbc":".nova"))throw NovaError(mode=="exec"?"Expected a .nbc bytecode file":"Expected a .nova source file");
     if(lang!="en"&&lang!="uk"&&lang!="pl")throw NovaError("--lang must be en, uk or pl");
+    if(traceSteps&&mode!="exec")throw NovaError("--trace-steps is supported for exec .nbc only");
     if(maxSteps<1||maxSteps>100000000)throw NovaError("--max-steps must be 1..100000000");
     string src=readFile(file);
-    if(mode=="exec") NovaBytecodeVM(maxSteps,appArgs).run(src);
+    if(mode=="exec") NovaBytecodeVM(maxSteps,appArgs,traceSteps).run(src);
     else {
       Runtime runtime(lang,maxSteps,appArgs);
       if(mode=="check"){runtime.check(src);cout<<"OK: syntax blocks valid (expressions checked when executed)\n";}

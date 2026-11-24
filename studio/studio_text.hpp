@@ -138,6 +138,57 @@ inline LineEdit toggleLineComments(std::wstring_view doc,size_t start,size_t fin
     throw std::length_error("Commenting exceeds maximum document size");
   return {begin,end,std::move(out),true};
 }
+// Whitespace-only formatter: never rewrites expressions or changes code semantics.
+// Preserves LF/CRLF, leading indentation, and the final-newline convention.
+inline ReplaceResult cleanTrailingWhitespace(std::wstring_view text,size_t maxChars=4*1024*1024){
+  if(text.size()>maxChars)throw std::length_error("Document exceeds maximum size");
+  std::wstring result;result.reserve(text.size());size_t removedLines=0;
+  for(size_t pos=0;pos<text.size();){
+    size_t end=text.find(L'\n',pos);
+    if(end==std::wstring_view::npos)end=text.size();
+    size_t bodyEnd=end;
+    if(bodyEnd>pos&&text[bodyEnd-1]==L'\r')--bodyEnd;
+    size_t stripped=bodyEnd;
+    while(stripped>pos&&(text[stripped-1]==L' '||text[stripped-1]==L'\t'))--stripped;
+    if(stripped!=bodyEnd)++removedLines;
+    result.append(text.substr(pos,stripped-pos));
+    if(bodyEnd!=end)result+=L'\r';
+    if(end<text.size())result+=L'\n';
+    pos=end+1;
+  }
+  return {std::move(result),removedLines};
+}
+// Indent/unindent whole selected lines without changing their line endings.
+// Unindent removes one tab or up to four spaces; indent inserts four spaces.
+inline LineEdit indentLines(std::wstring_view doc,size_t start,size_t finish,bool outdent,
+                            size_t maxChars=4*1024*1024){
+  start=std::min(start,doc.size());finish=std::min(finish,doc.size());
+  if(start>finish)std::swap(start,finish);
+  const auto prior=start?doc.rfind(L'\n',start-1):std::wstring_view::npos;
+  const size_t begin=prior==std::wstring_view::npos?0:prior+1;
+  const size_t last=start==finish?start:finish-1;
+  auto next=doc.find(L'\n',last);
+  const size_t end=next==std::wstring_view::npos?doc.size():next+1;
+  std::wstring result;bool changed=false;
+  for(size_t pos=begin;pos<end;){
+    size_t lineEnd=doc.find(L'\n',pos);
+    lineEnd=lineEnd==std::wstring_view::npos?end:std::min(end,lineEnd+1);
+    size_t body=lineEnd;
+    while(body>pos&&(doc[body-1]==L'\r'||doc[body-1]==L'\n'))--body;
+    if(body==pos){result.append(doc.substr(pos,lineEnd-pos));pos=lineEnd;continue;}
+    if(!outdent){result+=L"    ";result.append(doc.substr(pos,lineEnd-pos));changed=true;}
+    else{
+      size_t remove=0;
+      if(doc[pos]==L'\t')remove=1;
+      else while(remove<4&&pos+remove<body&&doc[pos+remove]==L' ')++remove;
+      changed|=remove!=0;result.append(doc.substr(pos+remove,lineEnd-pos-remove));
+    }
+    pos=lineEnd;
+  }
+  if(doc.size()-(end-begin)+result.size()>maxChars)
+    throw std::length_error("Indentation exceeds maximum document size");
+  return {begin,end,std::move(result),changed};
+}
 inline std::pair<size_t,size_t> lineColumn(std::wstring_view text,size_t offset){
   offset=std::min(offset,text.size());size_t line=1,col=1;
   for(size_t i=0;i<offset;++i){

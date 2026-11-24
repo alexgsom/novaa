@@ -7,6 +7,7 @@ class NovaBytecodeVM {
   using IteratorMap=std::unordered_map<std::string,Iterator>;
   struct Frame {size_t returnPc,stackBase;std::unordered_map<std::string,Value> locals;IteratorMap iterations;};
   long long maxSteps;
+  size_t traceRemaining=0; // Optional bounded diagnostic trace; no variable values or secrets.
   Runtime moduleRuntime;
   NovaEnv moduleEnv;
   static bool standardModule(const std::string& name){
@@ -123,7 +124,8 @@ class NovaBytecodeVM {
     throw error(pc,"unknown builtin: "+name);
   }
 public:
-  explicit NovaBytecodeVM(long long limit, std::vector<std::string> args={}):maxSteps(limit),moduleRuntime("en",limit,std::move(args)){}
+  explicit NovaBytecodeVM(long long limit, std::vector<std::string> args={},size_t traceSteps=0):
+    maxSteps(limit),traceRemaining(std::min<size_t>(traceSteps,10000)),moduleRuntime("en",limit,std::move(args)){}
   void run(const std::string& contents) {
     if(contents.size()>4*1024*1024)throw std::runtime_error("Bytecode file exceeds 4 MiB");
     globals.clear();globalIterations.clear();functions.clear();frames.clear();stack.clear();
@@ -176,6 +178,12 @@ private:
     while(pc<code.size()){
       if(++steps>maxSteps)throw error(pc,"execution step limit exceeded");
       const auto& ins=list(code[pc]);const std::string& op=str(ins[0],pc);
+      if(traceRemaining){
+        // Instruction index, opcode and stack/frame sizes only; never print operand values.
+        std::cerr<<"[nova-trace] step="<<steps<<" pc="<<pc<<" op="<<op
+                 <<" stack="<<stack.size()<<" frames="<<frames.size()<<'\n';
+        --traceRemaining;
+      }
       if(op=="halt")break;
       if(op=="function"){pc=destination(ins[3],pc,code.size());continue;}
       if(op=="push"){push(ins[1],pc);++pc;continue;}

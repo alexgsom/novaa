@@ -17,7 +17,8 @@ static constexpr int ADD_LABEL=6101,ADD_INPUT=6102,ADD_BUTTON=6103,
    CAPTION=6108,APPLY=6109,TITLE=6110,WIDTH_PLUS=6111,WIDTH_MINUS=6112,
    HEIGHT_PLUS=6113,HEIGHT_MINUS=6114, GRID=6115,PREVIEW=6116,
    PROP_X=6117,PROP_Y=6118,PROP_W=6119,PROP_H=6120,APPLY_PROPS=6121,
-   TEMPLATE_LOGIN=6122,TEMPLATE_FEEDBACK=6123,TEMPLATE_DASHBOARD=6124;
+   TEMPLATE_LOGIN=6122,TEMPLATE_FEEDBACK=6123,TEMPLATE_DASHBOARD=6124,
+   CENTER_X=6125,CENTER_Y=6126,DUPLICATE=6127;
 class DesignerWindow {
   HWND owner=nullptr,window=nullptr,caption=nullptr,title=nullptr,summary=nullptr;
   HWND propX=nullptr,propY=nullptr,propW=nullptr,propH=nullptr,preview=nullptr;
@@ -238,7 +239,10 @@ class DesignerWindow {
         propW=edit(PROP_W,725,398,126,L"");propH=edit(PROP_H,874,398,126,L"");
         button(L"Apply position / size",APPLY_PROPS,725,439,275);
         summary=CreateWindowW(L"STATIC",L"",WS_VISIBLE|WS_CHILD|SS_LEFT,
-                              725,499,275,62,hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+                              725,484,275,42,hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+        button(L"Center X",CENTER_X,725,540,85);
+        button(L"Center Y",CENTER_Y,815,540,85);
+        button(L"Duplicate",DUPLICATE,905,540,95);
         button(L"GENERATE NOVA CODE",EXPORT,725,590,275);
         info();return 0;
       }
@@ -256,6 +260,13 @@ class DesignerWindow {
           case APPLY:if(selected>=0){wchar_t buffer[512]{};GetWindowTextW(caption,buffer,512);
             form.widgets[(size_t)selected].caption=buffer;InvalidateRect(window,nullptr,FALSE);}break;
           case APPLY_PROPS:applyProperties();break;
+          case CENTER_X:if(selected>=0){nova_designer19::centerHorizontally(form,(size_t)selected);
+            info();InvalidateRect(window,nullptr,FALSE);}break;
+          case CENTER_Y:if(selected>=0){nova_designer19::centerVertically(form,(size_t)selected);
+            info();InvalidateRect(window,nullptr,FALSE);}break;
+          case DUPLICATE:if(selected>=0){try{selected=(int)nova_designer19::duplicate(form,(size_t)selected);
+            info();InvalidateRect(window,nullptr,FALSE);}catch(const std::exception&){
+            MessageBoxW(window,L"Cannot duplicate: limit of 32 widgets reached.",L"Nova Designer",MB_ICONWARNING);}}break;
           case GRID:gridEnabled=!gridEnabled;
             SetWindowTextW(GetDlgItem(window,GRID),gridEnabled?L"Snap: ON":L"Snap: OFF");
             InvalidateRect(window,nullptr,FALSE);break;

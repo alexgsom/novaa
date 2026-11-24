@@ -38,7 +38,7 @@ static constexpr UINT JOB_DONE=WM_APP+77, AI_DONE=WM_APP+78, JOB_OUTPUT=WM_APP+8
 static constexpr int ID_EDITOR=101,ID_OUTPUT=102,ID_STATUS=103;
 static constexpr int ID_PROJECT_LIST=110, ID_AI_INPUT=111, ID_AI_LOG=112, ID_TABS=113, ID_PROBLEMS=114;
 static constexpr int ID_NEW=201,ID_OPEN=202,ID_SAVE=203,ID_SAVE_AS=204,ID_CHECK=205,ID_RUN=206,ID_BUILD=207,ID_BUILD_GUI=208,ID_STOP=209,ID_ABOUT=210,ID_FIND=211,ID_REPLACE=212,ID_NEXT=213,ID_PREVIOUS=214,ID_TOGGLE_COMMENT=215;
-static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238;
+static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238,ID_FORMAT_SPACE=239,ID_INDENT=240,ID_OUTDENT=241;
 static constexpr size_t MAX_FILE=4*1024*1024;
 static constexpr COLORREF SHELL_BG=RGB(17,21,28),PANEL_BG=RGB(26,32,41),EDIT_BG=RGB(20,25,33);
 static constexpr COLORREF FOREGROUND=RGB(235,239,245),MUTED=RGB(150,162,178),ACCENT=RGB(104,139,235);
@@ -527,6 +527,41 @@ class Studio{
       setSelection(doc,change.begin,change.begin+change.replacement.size());
       setStatus(L"Toggled line comments");
     }catch(const std::exception& e){error(L"Comment failed: "+toWide(e.what()));}
+  }
+  void formatWhitespace(){
+    try{
+      auto before=editorText(editor);
+      auto formatted=nova_studio::cleanTrailingWhitespace(before,MAX_FILE);
+      if(!formatted.count){setStatus(L"Whitespace already clean");return;}
+      if(MessageBoxW(mainWindow,(L"Remove trailing spaces/tabs from "+std::to_wstring(formatted.count)+
+        L" lines? This preserves code and line endings.").c_str(),L"Format whitespace",
+        MB_YESNO|MB_ICONQUESTION)!=IDYES)return;
+      DWORD a=0,b=0;SendMessageW(editor,EM_GETSEL,(WPARAM)&a,(LPARAM)&b);
+      const size_t rawA=richEdit?rawIndex(before,(LONG)a):(size_t)a;
+      const size_t rawB=richEdit?rawIndex(before,(LONG)b):(size_t)b;
+      // Whole-document replace is one undo action for RichEdit, unlike SetWindowText.
+      SendMessageW(editor,EM_SETSEL,0,-1);
+      SendMessageW(editor,EM_REPLACESEL,TRUE,(LPARAM)formatted.text.c_str());
+      setSelection(formatted.text,std::min(rawA,formatted.text.size()),std::min(rawB,formatted.text.size()));
+      setStatus(L"Removed trailing whitespace from "+std::to_wstring(formatted.count)+L" lines");
+    }catch(const std::exception& e){error(L"Format failed: "+toWide(e.what()));}
+  }
+  void indentSelection(bool outdent){
+    try{
+      auto doc=editorText(editor);DWORD a=0,b=0;
+      SendMessageW(editor,EM_GETSEL,(WPARAM)&a,(LPARAM)&b);
+      size_t from=richEdit?rawIndex(doc,(LONG)a):std::min<size_t>(a,doc.size());
+      size_t until=richEdit?rawIndex(doc,(LONG)b):std::min<size_t>(b,doc.size());
+      auto change=nova_studio::indentLines(doc,from,until,outdent,MAX_FILE);
+      if(!change.changed){setStatus(L"No indentation to change");return;}
+      LONG left=richEdit?richIndex(doc,change.begin):(LONG)change.begin;
+      LONG right=richEdit?richIndex(doc,change.end):(LONG)change.end;
+      SendMessageW(editor,EM_SETSEL,(WPARAM)left,(LPARAM)right);
+      SendMessageW(editor,EM_REPLACESEL,TRUE,(LPARAM)change.replacement.c_str());
+      doc.replace(change.begin,change.end-change.begin,change.replacement);
+      setSelection(doc,change.begin,change.begin+change.replacement.size());
+      setStatus(outdent?L"Outdented selection":L"Indented selection");
+    }catch(const std::exception& e){error(L"Indent failed: "+toWide(e.what()));}
   }
   void onSearchMessage(const FINDREPLACEW* f){
     if(!f)return;
@@ -1488,6 +1523,9 @@ class Studio{
       AppendMenuW(edit,MF_STRING,ID_NEXT,L"Find next\tF3");
       AppendMenuW(edit,MF_STRING,ID_PREVIOUS,L"Find previous\tShift+F3");
       AppendMenuW(edit,MF_STRING,ID_TOGGLE_COMMENT,L"Toggle comment\tCtrl+K");
+      AppendMenuW(edit,MF_STRING,ID_INDENT,L"Indent selected lines\tCtrl+]");
+      AppendMenuW(edit,MF_STRING,ID_OUTDENT,L"Outdent selected lines\tCtrl+[");
+      AppendMenuW(edit,MF_STRING,ID_FORMAT_SPACE,L"Clean trailing whitespace...");
       AppendMenuW(edit,MF_STRING,ID_COMPLETE,L"Complete keyword/function\tCtrl+Space");
       AppendMenuW(edit,MF_STRING,ID_SYMBOLS,L"Go to function\tCtrl+Shift+O");
       AppendMenuW(edit,MF_STRING,ID_PROJECT_SEARCH,L"Search in project\tCtrl+Shift+F");
@@ -1600,6 +1638,9 @@ class Studio{
         case ID_FIND:openSearch(false);break;case ID_REPLACE:openSearch(true);break;
         case ID_NEXT:findOccurrence(false);break;case ID_PREVIOUS:findOccurrence(true);break;
         case ID_TOGGLE_COMMENT:toggleComment();break;
+        case ID_FORMAT_SPACE:formatWhitespace();break;
+        case ID_INDENT:indentSelection(false);break;
+        case ID_OUTDENT:indentSelection(true);break;
         case ID_COMPLETE:completeKeyword();break;
         case ID_SYMBOLS:navigateSymbols();break;
         case ID_PROJECT_SEARCH:focusProjectSearch();break;
@@ -1788,7 +1829,7 @@ public:
     darkTitlebar(mainWindow);
     ACCEL bindings[]={{FVIRTKEY|FCONTROL,'N',ID_NEW},{FVIRTKEY|FCONTROL,'O',ID_OPEN},{FVIRTKEY|FCONTROL,'S',ID_SAVE},
                        {FVIRTKEY|FCONTROL,'W',ID_TAB_CLOSE},{FVIRTKEY|FCONTROL,VK_TAB,ID_TAB_NEXT},
-                       {FVIRTKEY|FCONTROL,VK_SPACE,ID_COMPLETE},{FVIRTKEY|FCONTROL,'F',ID_FIND},{FVIRTKEY|FCONTROL,'H',ID_REPLACE},{FVIRTKEY|FCONTROL,'K',ID_TOGGLE_COMMENT},{FVIRTKEY|FCONTROL|FSHIFT,'P',ID_QUICK_ACTIONS},{FVIRTKEY|FCONTROL|FSHIFT,'O',ID_SYMBOLS},{FVIRTKEY|FCONTROL|FSHIFT,'F',ID_PROJECT_SEARCH},{FVIRTKEY|FCONTROL|FSHIFT,'E',ID_VIEW_FOCUS},{FVIRTKEY|FCONTROL,VK_RETURN,ID_TERMINAL_SEND},
+                       {FVIRTKEY|FCONTROL,VK_SPACE,ID_COMPLETE},{FVIRTKEY|FCONTROL,'F',ID_FIND},{FVIRTKEY|FCONTROL,'H',ID_REPLACE},{FVIRTKEY|FCONTROL,'K',ID_TOGGLE_COMMENT},{FVIRTKEY|FCONTROL,VK_OEM_6,ID_INDENT},{FVIRTKEY|FCONTROL,VK_OEM_4,ID_OUTDENT},{FVIRTKEY|FCONTROL|FSHIFT,'P',ID_QUICK_ACTIONS},{FVIRTKEY|FCONTROL|FSHIFT,'O',ID_SYMBOLS},{FVIRTKEY|FCONTROL|FSHIFT,'F',ID_PROJECT_SEARCH},{FVIRTKEY|FCONTROL|FSHIFT,'E',ID_VIEW_FOCUS},{FVIRTKEY|FCONTROL,VK_RETURN,ID_TERMINAL_SEND},
                        {FVIRTKEY,VK_F3,ID_NEXT},{FVIRTKEY|FSHIFT,VK_F3,ID_PREVIOUS},
                        {FVIRTKEY,VK_F5,ID_RUN},{FVIRTKEY,VK_F6,ID_CHECK},{FVIRTKEY,VK_F7,ID_BUILD},{FVIRTKEY|FSHIFT,VK_F5,ID_STOP}};
     accelerators=CreateAcceleratorTableW(bindings,(int)(sizeof(bindings)/sizeof(bindings[0])));
