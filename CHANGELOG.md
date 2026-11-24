@@ -1,3 +1,6 @@
+## 4.0.2 — Hyper40 Windows CI diagnostics (24.11.2026)
+Windows acceptance successfully built NovaStudio.exe but the Hyper40 CTest process ended with 0xc0000409. Updated the portable Hyper40 test: explicit Release-safe CHECK diagnostics, unique temporary directories, guarded optional access, and stage-level stdout. All 10 Linux native CTests and Clang ASan/UBSan Hyper40 check passed. Windows retest pending; product runtime unchanged.
+
 ## Nova Studio 4.0.1 — Windows MSVC compilation hotfix (2026-11-24)
 
 - Avoid Windows SDK macro collisions in App Designer control IDs (`ID_DESIGNER_*`).
