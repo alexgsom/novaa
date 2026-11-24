@@ -46,6 +46,7 @@ static const unordered_map<string,string> ALIAS = {
   {"else","else"},{"інакше","else"},{"inaczej","else"},
   {"end","end"},{"кінець","end"},{"koniec","end"},
   {"repeat","repeat"},{"повтори","repeat"},{"powtórz","repeat"},
+  {"while","while"},{"поки","while"},{"dopóki","while"},
   {"for","for"},{"для","for"},{"dla","for"},
   {"try","try"},{"спробуй","try"},{"spróbuj","try"},
   {"catch","catch"},{"злови","catch"},{"złap","catch"},
@@ -234,7 +235,7 @@ class SourceParser {
         auto b=parseBlock({"else","end"});s.body=std::move(b.statements);
         if(b.stop=="else"){b=parseBlock({"end"});s.other=std::move(b.statements);}
         if(b.stop!="end")throw NovaError("Syntax error (line "+to_string(l.number)+"): missing end for if");
-      }else if(s.kind=="repeat"||s.kind=="for"||s.kind=="function"){
+      }else if(s.kind=="repeat"||s.kind=="while"||s.kind=="for"||s.kind=="function"){
         if(s.arg.empty())throw NovaError("Syntax error (line "+to_string(l.number)+"): "+s.kind+" requires an argument");
         auto b=parseBlock({"end"});s.body=std::move(b.statements);
         if(b.stop!="end")throw NovaError("Syntax error (line "+to_string(l.number)+"): missing end for "+s.kind);
@@ -816,6 +817,16 @@ class Runtime {
         auto name=trim(s.arg.substr(0,ix));if(!validName(name))fail("syntax",s.line,"invalid variable name");env[name]=expression(trim(s.arg.substr(ix+1)),env,s.line);
       }else if(k=="show")cout<<expression(s.arg,env,s.line).repr()<<'\n';
       else if(k=="if") {Signal v=exec(expression(s.arg,env,s.line).truth()?s.body:s.other,env);if(v.kind!=Signal::none)return v;}
+      else if(k=="while"){
+        // Re-evaluate the condition on every iteration; the shared step budget
+        // prevents unbounded loops even if the body contains no statements.
+        while(expression(s.arg,env,s.line).truth()){
+          tick(s.line);Signal v=exec(s.body,env);
+          if(v.kind==Signal::breaking)break;
+          if(v.kind==Signal::continuing)continue;
+          if(v.kind!=Signal::none)return v;
+        }
+      }
       else if(k=="repeat"){
         string arg=s.arg;for(auto suffix:{" times"," разів"," razy"})if(arg.size()>strlen(suffix)&&arg.compare(arg.size()-strlen(suffix),strlen(suffix),suffix)==0){arg=trim(arg.substr(0,arg.size()-strlen(suffix)));break;}
         double count=expression(arg,env,s.line).num(s.line);if(!isfinite(count)||floor(count)!=count||count<0||count>100000)fail("runtime",s.line,"repeat requires an integer from 0 to 100000");

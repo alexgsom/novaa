@@ -58,7 +58,7 @@ jobs:
       - name: Build again with CMake and run native C++ editor tests
         run: |
           cmake -S . -B build-acceptance -G 'Visual Studio 17 2022' -A x64
-          cmake --build build-acceptance --config Release --target nova-native nova-windowed NovaStudio nova-studio-text-tests
+          cmake --build build-acceptance --config Release --target nova-native nova-windowed NovaStudio nova-studio-text-tests nova-studio-ai-tests nova-studio-next14-tests nova-studio-designer15-tests nova-studio-trinity16-tests nova-studio-living17-tests nova-studio-aiproof18-tests
           ctest --test-dir build-acceptance -C Release --output-on-failure
       - name: Nova Studio headless text engine and real Win32 controls
         run: |

@@ -1,3 +1,5 @@
+> **Update 14:** CMake та обидва workflows запускають `nova-studio-next14-tests`, а `NovaStudio.exe --gui-smoke` перевіряє існування та перемикання вкладок. Новий Windows Artifact потребує успішного зеленого запуску.
+
 # Nova Native 1.0 Beta 2 — Windows CI & acceptance guide
 
 This release includes a **real Windows CI workflow** in `.github/workflows/windows-acceptance.yml`.

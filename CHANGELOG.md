@@ -1,3 +1,26 @@
+## Nova Studio Next Preview 3 / Update 15
+
+- Win32 form designer (`studio_designer15_win.hpp`) з портативною моделлю компонування (`studio_designer15.hpp`), генерацією однієї .nova-програми в нову вкладку лише після підтвердження.
+- Interactive Run: обмежений stdin pipe, поточний вивід stdout/stderr, поле Send input (Ctrl+Enter).
+- Self-hosted bytecode VM: `ask`, `запитай`, `zapytaj` тепер читають стандартний ввід.
+- AI Create app: явно введений опис → чернетка одного файлу Nova, відкривається тільки після підтвердження; без автоматичного запису чи запуску.
+- Нові нативні CMake та Python-тести, Windows GUI smoke тест для створення вікна дизайнера, два приклади й інструкції.
+- Windows GUI і реальний OpenAI API ще не підтверджені.
+
+## Nova Studio Next Preview 2 — Update 14
+
+- Multi-document tabs with unsaved buffer tracking and Ctrl+Tab/Ctrl+W.
+- Nova keyword completion in 3 languages and RichEdit auto-indentation.
+- Clickable compiler/runtime diagnostics with line navigation.
+- AI proposal preview and manual approval, with original-text verification.
+- Portable C++ tests, GUI smoke checks, and CI/packaging integration.
+
+# Update 13 — Nova Studio Next Preview 1
+
+See [STUDIO_NEXT_13_RELEASE.md](STUDIO_NEXT_13_RELEASE.md) for real code changes and test limits.
+
+---
+
 # Nova Native 1.0 Beta 2 — Windows CI Acceptance
 
 - Dedicated GitHub Windows Server 2022 x64 MSVC acceptance workflow, separate from Linux CI.
@@ -59,3 +82,10 @@
 **Обмеження:** готового перевіреного Windows EXE в локальній збірці немає; `-Windowed` приховує консоль, але Nova bytecode compiler **ще не компілює `import ui`**; `.exe` створюється на основі готового PE x64 runtime, а не з машинного коду, згенерованого Nova.
 
 **Перевірки:** 192/192 на Linux; CMake/GCC/Clang зібрали C++ рушій. Три Linux x64 демонстраційні виконувані файли містяться в `dist/`.
+
+## Nova Studio Next Preview 4 — Updates 16 + 17 + 18
+
+- 16 Trinity: trilingual keyword view (new unsaved tab) with literal/comment protection; three sample programs compile into identical bytecode.
+- 17 Living UI: exact metadata-backed designer roundtrip for generated forms; rejects hand-edited code, applies on approval.
+- 18 AI Proof: non-executing isolated-file compiler check for AI proposals, snapshot validation, explicit approval, fail-closed semantics.
+- Three new portable native test suites plus end-to-end Trinity Python regression; CI targets and portable Windows package updated.

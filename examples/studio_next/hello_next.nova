@@ -1,0 +1,12 @@
+# Nova Studio Next Preview — three-language greeting
+function greet(name)
+    show "Вітаю у Nova Studio Next, " + name + "!"
+end
+
+let person = "розробнику"
+greet(person)
+let step = 1
+поки step <= 3
+    show "Крок " + str(step) + ": працюємо далі 🚀"
+    step = step + 1
+кінець

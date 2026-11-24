@@ -30,9 +30,9 @@ Write-Output "Built Windows GUI runner: $gui"
 $studio=Join-Path $root 'studio\nova_studio.cpp'
 $studioOut=Join-Path $bin 'NovaStudio.exe'
 if($Compiler -eq 'MSVC'){
-  & cl.exe /nologo /EHsc /std:c++17 /utf-8 /O2 /MT /W4 "/Fe:$studioOut" $studio /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib comdlg32.lib shell32.lib
+  & cl.exe /nologo /EHsc /std:c++17 /utf-8 /O2 /MT /W4 "/Fe:$studioOut" $studio /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib comdlg32.lib shell32.lib ole32.lib winhttp.lib comctl32.lib
 }else{
-  & g++.exe -std=c++17 -O2 -Wall -Wextra -Wpedantic -municode -mwindows $studio -o $studioOut -luser32 -lgdi32 -lcomdlg32 -lshell32
+  & g++.exe -std=c++17 -O2 -Wall -Wextra -Wpedantic -municode -mwindows $studio -o $studioOut -luser32 -lgdi32 -lcomdlg32 -lshell32 -lole32 -lwinhttp -lcomctl32
 }
 if($LASTEXITCODE -ne 0){throw "Nova Studio Windows compilation failed: $LASTEXITCODE"}
 Write-Output "Built native Nova Studio: $studioOut"

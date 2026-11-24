@@ -1,0 +1,11 @@
+# Trinity demo: comments and strings stay unchanged.
+нехай total = 0
+нехай n = 1
+поки n <= 5
+    якщо n > 0 і не хиба
+        total = total + n
+    кінець
+    n = n + 1
+кінець
+покажи "Trinity • Київ / Łódź"
+покажи total

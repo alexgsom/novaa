@@ -1,0 +1,218 @@
+#pragma once
+// Win32 visual form designer. The generated code is sent to Studio for confirmation;
+// the designer never writes files or runs generated code on its own.
+#include "studio_designer15.hpp"
+#include "studio_living17.hpp"
+#include <windows.h>
+#include <windowsx.h>
+#include <algorithm>
+#include <cstddef>
+#include <memory>
+#include <string>
+
+namespace nova_designer15 {
+static constexpr int ADD_LABEL=6101,ADD_INPUT=6102,ADD_BUTTON=6103,
+   ADD_CHECK=6104,ADD_TEXTAREA=6105,REMOVE=6106,EXPORT=6107,
+   CAPTION=6108,APPLY=6109,TITLE=6110,WIDTH_PLUS=6111,WIDTH_MINUS=6112,
+   HEIGHT_PLUS=6113,HEIGHT_MINUS=6114;
+class DesignerWindow {
+  HWND owner=nullptr,window=nullptr,caption=nullptr,title=nullptr,summary=nullptr;
+  Form form;
+  std::uint64_t sourceDocumentId=0;
+  std::wstring sourceSnapshot;
+  int selected=-1,dragLastX=0,dragLastY=0;
+  bool dragging=false,autoDelete=false;
+  static constexpr int canvasX=32,canvasY=132;
+  static constexpr double scale=0.78;
+  static constexpr UINT WM_EXPORT_FORM=WM_APP+79;
+  static int screenX(int logical){return canvasX+(int)(logical*scale+0.5);}
+  static int screenY(int logical){return canvasY+(int)(logical*scale+0.5);}
+  HWND button(LPCWSTR text,int id,int x,int y,int w){
+    return CreateWindowW(L"BUTTON",text,WS_VISIBLE|WS_CHILD|WS_TABSTOP|BS_PUSHBUTTON,
+      x,y,w,31,window,(HMENU)(INT_PTR)id,GetModuleHandleW(nullptr),nullptr);
+  }
+  HWND edit(int id,int x,int y,int w,const wchar_t* value){
+    return CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",value,WS_VISIBLE|WS_CHILD|ES_AUTOHSCROLL,
+      x,y,w,30,window,(HMENU)(INT_PTR)id,GetModuleHandleW(nullptr),nullptr);
+  }
+  void info(){
+    std::wstring s=selected<0?L"Choose a widget or add one above":
+      L"Selected: "+std::wstring(kindName(form.widgets[(size_t)selected].kind))+
+      L"  |  drag to move, +/- to resize";
+    if(summary)SetWindowTextW(summary,s.c_str());
+    if(caption){SetWindowTextW(caption,selected<0?L"":form.widgets[(size_t)selected].caption.c_str());
+      EnableWindow(caption,selected>=0);}
+  }
+  RECT rect(const Widget& widget)const{
+    return {screenX(widget.x),screenY(widget.y),screenX(widget.x+widget.w),screenY(widget.y+widget.h)};
+  }
+  void draw(HWND hwnd){
+    PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);
+    RECT background{};GetClientRect(hwnd,&background);
+    HBRUSH dark=CreateSolidBrush(RGB(20,26,39));FillRect(dc,&background,dark);DeleteObject(dark);
+    RECT mainFrame{canvasX-8,canvasY-8,screenX(form.width)+8,screenY(form.height)+8};
+    HBRUSH frame=CreateSolidBrush(RGB(215,223,235));FillRect(dc,&mainFrame,frame);DeleteObject(frame);
+    RECT inside{canvasX,canvasY,screenX(form.width),screenY(form.height)};
+    HBRUSH white=CreateSolidBrush(RGB(251,252,255));FillRect(dc,&inside,white);DeleteObject(white);
+    SetBkMode(dc,TRANSPARENT);
+    for(size_t i=0;i<form.widgets.size();++i){
+      const auto& v=form.widgets[i];RECT r=rect(v);
+      const bool chosen=(int)i==selected;
+      HBRUSH fill=CreateSolidBrush(v.kind==Kind::Button?RGB(78,128,222):
+                                  v.kind==Kind::Input||v.kind==Kind::Textarea?RGB(241,244,250):
+                                  RGB(252,252,255));
+      FillRect(dc,&r,fill);DeleteObject(fill);
+      HPEN pen=CreatePen(PS_SOLID,chosen?3:1,chosen?RGB(242,131,39):RGB(148,162,185));
+      HGDIOBJ oldPen=SelectObject(dc,pen);
+      MoveToEx(dc,r.left,r.top,nullptr);LineTo(dc,r.right,r.top);LineTo(dc,r.right,r.bottom);
+      LineTo(dc,r.left,r.bottom);LineTo(dc,r.left,r.top);
+      SelectObject(dc,oldPen);DeleteObject(pen);
+      RECT text=r;text.left+=7;text.right-=5;
+      SetTextColor(dc,v.kind==Kind::Button?RGB(255,255,255):RGB(25,39,57));
+      std::wstring label=v.kind==Kind::Checkbox?L"[ ] "+v.caption:v.caption;
+      DrawTextW(dc,label.c_str(),-1,&text,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+    }
+    RECT hint{30,650,700,690};SetTextColor(dc,RGB(190,205,229));
+    DrawTextW(dc,L"Preview: move widgets with the mouse. Adjust text and size on the right.\nExport creates a new .nova tab or proposes an edit to the current form (never auto-saved).",-1,&hint,DT_WORDBREAK);
+    EndPaint(hwnd,&ps);
+  }
+  void clickAt(int x,int y){
+    selected=-1;
+    for(size_t i=form.widgets.size();i>0;--i){
+      RECT r=rect(form.widgets[i-1]);
+      if(x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom){selected=(int)(i-1);break;}
+    }
+    dragging=selected>=0;dragLastX=x;dragLastY=y;
+    if(dragging)SetCapture(window);
+    info();InvalidateRect(window,nullptr,FALSE);
+  }
+  void moveAt(int x,int y){
+    if(!dragging||selected<0)return;
+    auto& w=form.widgets[(size_t)selected];
+    const int dx=(int)((x-dragLastX)/scale);
+    const int dy=(int)((y-dragLastY)/scale);
+    if(dx||dy){form.move((size_t)selected,w.x+dx,w.y+dy);
+      dragLastX=x;dragLastY=y;InvalidateRect(window,nullptr,FALSE);}
+  }
+  void add(Kind kind){
+    try{form.add(kind);selected=(int)form.widgets.size()-1;info();InvalidateRect(window,nullptr,FALSE);}
+    catch(const std::exception&){MessageBoxW(window,L"Maximum 32 form widgets.",L"Nova Designer",MB_ICONWARNING);}
+  }
+  void adjust(int dw,int dh){
+    if(selected<0)return;
+    auto& w=form.widgets[(size_t)selected];form.resize((size_t)selected,w.w+dw,w.h+dh);
+    InvalidateRect(window,nullptr,FALSE);
+  }
+  void exportCode(){
+    try{
+      wchar_t titleValue[256]{};GetWindowTextW(title,titleValue,256);
+      form.title=titleValue;
+      if(form.title.empty())throw std::invalid_argument("Window title is required");
+      // form.toNova() is embedded in the canonical editable designer export.
+      std::wstring value=nova_living17::exportEditable(form);
+      if(MessageBoxW(window,sourceDocumentId?L"Propose replacing the ORIGINAL designer-generated code?\nNova Studio will check for unsaved edits and ask again before applying.":L"Create a NEW unsaved Nova tab with this generated window?\nYou can review it before Save, Run or Build EXE.",
+                     L"Review generated application",MB_ICONQUESTION|MB_YESNO)!=IDYES)return;
+      if(sourceDocumentId){
+        auto* change=new nova_living17::DesignerChange{sourceDocumentId,sourceSnapshot,std::move(value)};
+        if(!PostMessageW(owner,WM_APP+81,0,(LPARAM)change)){
+          delete change;MessageBoxW(window,L"Nova Studio is no longer available.",L"Nova Designer",MB_ICONERROR);
+        }
+      }else{
+        auto* code=new std::wstring(std::move(value));
+        if(!PostMessageW(owner,WM_EXPORT_FORM,0,(LPARAM)code)){
+          delete code;MessageBoxW(window,L"Nova Studio is no longer available.",L"Nova Designer",MB_ICONERROR);
+        }
+      }
+    }catch(const std::exception&){MessageBoxW(window,L"Invalid title or a control is outside the form.",L"Nova Designer",MB_ICONERROR);}
+  }
+  LRESULT message(HWND hwnd,UINT msg,WPARAM w,LPARAM l){
+    switch(msg){
+      case WM_CREATE:{
+        window=hwnd;
+        CreateWindowW(L"STATIC",L"NOVA APP DESIGNER  |  Visual layout to real Nova code",
+                      WS_VISIBLE|WS_CHILD,32,20,710,24,hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+        int x=32;
+        const struct {LPCWSTR text;int id;int width;} actions[]={
+          {L"+ Label",ADD_LABEL,99},{L"+ Input",ADD_INPUT,99},{L"+ Button",ADD_BUTTON,99},
+          {L"+ Checkbox",ADD_CHECK,115},{L"+ Textarea",ADD_TEXTAREA,120},{L"Remove",REMOVE,88}};
+        for(const auto& a:actions){button(a.text,a.id,x,70,a.width);x+=a.width+8;}
+        CreateWindowW(L"STATIC",L"WINDOW TITLE",WS_VISIBLE|WS_CHILD,725,110,235,25,
+                      hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+        title=edit(TITLE,725,138,275,form.title.c_str());
+        CreateWindowW(L"STATIC",L"SELECTED WIDGET TEXT",WS_VISIBLE|WS_CHILD,725,195,235,25,
+                      hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+        caption=edit(CAPTION,725,225,275,L"");
+        button(L"Apply text",APPLY,725,264,130);
+        CreateWindowW(L"STATIC",L"WIDGET SIZE",WS_VISIBLE|WS_CHILD,725,320,230,25,
+                      hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+        button(L"Width +",WIDTH_PLUS,725,355,130);button(L"Width -",WIDTH_MINUS,870,355,130);
+        button(L"Height +",HEIGHT_PLUS,725,395,130);button(L"Height -",HEIGHT_MINUS,870,395,130);
+        summary=CreateWindowW(L"STATIC",L"",WS_VISIBLE|WS_CHILD|SS_LEFT,
+                              725,464,275,62,hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
+        button(L"GENERATE NOVA CODE",EXPORT,725,565,275);
+        info();return 0;
+      }
+      case WM_LBUTTONDOWN:clickAt(GET_X_LPARAM(l),GET_Y_LPARAM(l));return 0;
+      case WM_MOUSEMOVE:moveAt(GET_X_LPARAM(l),GET_Y_LPARAM(l));return 0;
+      case WM_LBUTTONUP:if(dragging){dragging=false;ReleaseCapture();}return 0;
+      case WM_COMMAND:{
+        switch(LOWORD(w)){
+          case ADD_LABEL:add(Kind::Label);break;
+          case ADD_INPUT:add(Kind::Input);break;
+          case ADD_BUTTON:add(Kind::Button);break;
+          case ADD_CHECK:add(Kind::Checkbox);break;
+          case ADD_TEXTAREA:add(Kind::Textarea);break;
+          case REMOVE:if(selected>=0){form.erase((size_t)selected);selected=-1;info();InvalidateRect(window,nullptr,FALSE);}break;
+          case APPLY:if(selected>=0){wchar_t buffer[512]{};GetWindowTextW(caption,buffer,512);
+            form.widgets[(size_t)selected].caption=buffer;InvalidateRect(window,nullptr,FALSE);}break;
+          case WIDTH_PLUS:adjust(20,0);break;
+          case WIDTH_MINUS:adjust(-20,0);break;
+          case HEIGHT_PLUS:adjust(0,15);break;
+          case HEIGHT_MINUS:adjust(0,-15);break;
+          case EXPORT:exportCode();break;
+        }return 0;
+      }
+      case WM_PAINT:draw(hwnd);return 0;
+      case WM_ERASEBKGND:return 1;
+      case WM_CLOSE:DestroyWindow(hwnd);return 0;
+      case WM_NCDESTROY:SetWindowLongPtrW(hwnd,GWLP_USERDATA,0);if(autoDelete)delete this;
+         return DefWindowProcW(hwnd,msg,w,l);
+    }
+    return DefWindowProcW(hwnd,msg,w,l);
+  }
+  static LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM w,LPARAM l){
+    auto* self=(DesignerWindow*)GetWindowLongPtrW(hwnd,GWLP_USERDATA);
+    if(msg==WM_NCCREATE){self=(DesignerWindow*)((CREATESTRUCTW*)l)->lpCreateParams;
+      SetWindowLongPtrW(hwnd,GWLP_USERDATA,(LONG_PTR)self);}
+    return self?self->message(hwnd,msg,w,l):DefWindowProcW(hwnd,msg,w,l);
+  }
+public:
+  explicit DesignerWindow(HWND parent,const std::optional<Form>& existing=std::nullopt,
+                          std::uint64_t documentId=0,std::wstring snapshot={})
+    :owner(parent),sourceDocumentId(documentId),sourceSnapshot(std::move(snapshot)){
+    if(existing)form=*existing;
+    else{form.add(Kind::Label);form.add(Kind::Input);form.add(Kind::Button);}
+  }
+  static void show(HWND owner,const std::wstring& existingCode={},std::uint64_t documentId=0){
+    std::optional<Form> existing;
+    if(documentId){
+      existing=nova_living17::importEditable(existingCode);
+      if(!existing){MessageBoxW(owner,L"This source is not an unchanged designer-generated form.\nManual edits are protected. Create a new design instead.",
+                            L"Nova Living UI",MB_ICONWARNING);return;}
+    }
+    static const wchar_t* name=L"NovaStudioNextVisualDesigner15";
+    WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=proc;
+    wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
+    wc.lpszClassName=name;wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);
+    if(!RegisterClassW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){
+      MessageBoxW(owner,L"Cannot register designer window.",L"Nova Designer",MB_ICONERROR);return;}
+    auto* self=new DesignerWindow(owner,existing,documentId,existingCode);
+    HWND hwnd=CreateWindowW(name,L"Nova Living UI | Designer Update 17",
+            WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,
+            CW_USEDEFAULT,CW_USEDEFAULT,1040,735,owner,nullptr,GetModuleHandleW(nullptr),self);
+    if(!hwnd){delete self;MessageBoxW(owner,L"Cannot create visual designer.",L"Nova Designer",MB_ICONERROR);return;}
+    self->autoDelete=true;
+    ShowWindow(hwnd,SW_SHOW);UpdateWindow(hwnd);
+  }
+};
+} // namespace nova_designer15

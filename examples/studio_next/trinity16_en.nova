@@ -1,0 +1,11 @@
+# Trinity demo: comments and strings stay unchanged.
+let total = 0
+let n = 1
+while n <= 5
+    if n > 0 and not false
+        total = total + n
+    end
+    n = n + 1
+end
+show "Trinity • Київ / Łódź"
+show total

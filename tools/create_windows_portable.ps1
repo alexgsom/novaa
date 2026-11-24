@@ -8,13 +8,14 @@ if(Test-Path -LiteralPath $dest) { throw "Destination already exists: $dest (ref
 $files=@(
   'bin/nova-native.exe', 'bin/nova-windowed.exe', 'bin/NovaStudio.exe',
   'compiler/novac_selfhost.nbc',
-  'nova.ps1','nova.cmd','install_windows.ps1','uninstall_windows.ps1',
+  'nova.ps1','nova.cmd','start_nova_ai.ps1','install_windows.ps1','uninstall_windows.ps1',
   'register_nova_files.ps1','unregister_nova_files.ps1',
   'tests/windows_gui_click.nova', 'tests/smoke_win32_click.ps1',
-  'examples/bootstrap/trilingual.nova',
+  'examples/bootstrap/trilingual.nova', 'examples/studio_next/hello_next.nova', 'examples/studio_next/while_demo14.nova', 'examples/studio_next/designer_demo15.nova', 'examples/studio_next/interactive_ask15.nova',
+  'examples/studio_next/trinity16_en.nova','examples/studio_next/trinity16_uk.nova','examples/studio_next/trinity16_pl.nova',
   'examples/windows09/hello_gui.nova', 'examples/windows09/counter_gui.nova',
   'examples/windows09/notes_gui.nova',
-  'README.md','INSTALL_WINDOWS.md','WINDOWS_CI.md','studio/README.md','LICENSE'
+  'README.md','NOVA_STUDIO_NEXT_13_UA.md','NOVA_STUDIO_NEXT_14_UA.md','NOVA_STUDIO_NEXT_15_UA.md','NOVA_STUDIO_NEXT_16_18_UA.md','INSTALL_WINDOWS.md','WINDOWS_CI.md','studio/README.md','LICENSE'
 )
 foreach($relative in $files) {
   if(-not (Test-Path -LiteralPath (Join-Path $root $relative) -PathType Leaf)) {
@@ -35,7 +36,7 @@ foreach($relative in $files) {
   [IO.Directory]::CreateDirectory($parent)|Out-Null
   Copy-Item -LiteralPath $from -Destination $to
 }
-[IO.File]::WriteAllText((Join-Path $dest 'VERSION.txt'),"Nova Native 1.0 Beta 2`nWindows x64, CI acceptance build`n",[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $dest 'VERSION.txt'),"Nova Studio Next Preview 4 - Updates 16-18`nNova Native 1.0 Beta 2, Windows x64`n",[Text.UTF8Encoding]::new($false))
 # Hash manifest is for accidental corruption detection, not code signing.
 $manifest=@()
 foreach($f in Get-ChildItem -LiteralPath $dest -File -Recurse | Sort-Object FullName) {

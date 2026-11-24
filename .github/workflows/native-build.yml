@@ -14,14 +14,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install libcurl development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libcurl4-openssl-dev
+          pkg-config --modversion libcurl
       - name: Build native Linux Nova (Python-free runtime)
         run: sh build.sh
       - name: Native runtime regression tests
         run: python -m unittest discover -s tests -v
       - name: Verify Nova compiler self-hosting
         run: sh bootstrap_selfhost.sh
-      - name: CMake native editor-text test
+      - name: CMake native Studio text and AI helpers tests
         run: |
           cmake -S . -B build-linux
-          cmake --build build-linux --target nova-studio-text-tests
+          cmake --build build-linux --target nova-studio-text-tests nova-studio-ai-tests nova-studio-next14-tests nova-studio-designer15-tests nova-studio-trinity16-tests nova-studio-living17-tests nova-studio-aiproof18-tests
           ctest --test-dir build-linux --output-on-failure

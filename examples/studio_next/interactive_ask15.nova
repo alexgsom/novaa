@@ -1,0 +1,4 @@
+# Nova Studio Next Preview 3: type a name below and press Send input (Ctrl+Enter).
+show "Привіт! Як тебе звати?"
+let name = ask("Ваше ім'я: ")
+show "Вітаю, " + name + "!"

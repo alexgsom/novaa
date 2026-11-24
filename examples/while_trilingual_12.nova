@@ -1,0 +1,24 @@
+# Nova update 12: while is available in English, Ukrainian and Polish.
+let score = 0
+let n = 1
+while n <= 4
+    score = score + n
+    n = n + 1
+end
+show "English sum: " + str(score)
+
+let k = 3
+поки k > 0
+    show "Українською: " + str(k)
+    k = k - 1
+кінець
+
+let i = 0
+dopóki i < 3
+    i = i + 1
+    jeśli i == 2
+        kontynuuj
+    koniec
+    pokaż "Polski: " + str(i)
+koniec
+show "Готово!"

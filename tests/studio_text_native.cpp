@@ -24,5 +24,19 @@ int main(){
     if(t.kind==Kind::Comment)++comment;
     if(t.kind==Kind::String)++string;}
   CHECK(kw==3&&number==1&&comment==1&&string==2);
+  // Comment/uncomment preserves CRLF, indentation and blank lines.
+  auto change=toggleLineComments(L"    show 1\r\n    show 2\r\n",0,0);
+  CHECK(change.changed && change.replacement==L"    # show 1\r\n");
+  change=toggleLineComments(L"  show 1\r\n\r\n  show 2\r\n",0,19);
+  CHECK(change.replacement==L"  # show 1\r\n\r\n  # show 2\r\n");
+  CHECK(toggleLineComments(change.replacement,0,change.replacement.size()).replacement==L"  show 1\r\n\r\n  show 2\r\n");
+  change=toggleLineComments(L" # show 1\n  show 2\n",0,100);
+  CHECK(change.replacement==L" # # show 1\n  # show 2\n");
+  CHECK(!toggleLineComments(L"\r\n",0,0).changed);
+  try{toggleLineComments(L"show 1\n",0,0,5);CHECK(false);}catch(const std::length_error&){}
+  auto w=tokenize(L"while n < 4\nпоки n < 4\ndopóki n < 4");
+  int whileKw=0;
+  for(auto t:w)if(t.kind==Kind::Keyword)++whileKw;
+  CHECK(whileKw==3);
   std::wcout<<L"nova studio text helpers: PASS\n";
 }

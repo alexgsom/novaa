@@ -26,6 +26,9 @@ function keyword(word)
     if word == "повтори" or word == "powtórz"
         return "repeat"
     end
+    if word == "поки" or word == "dopóki"
+        return "while"
+    end
     if word == "для" or word == "dla"
         return "for"
     end
@@ -740,6 +743,17 @@ function compile_source(source)
                 frame.kind = "else"
                 frame.end = at
             end
+            if command == "while"
+                handled = true
+                if tail == ""
+                    raise "While requires a condition on line " + str(line_number)
+                end
+                let begin = len(code)
+                append_expr(code, tail)
+                let endjump = len(code)
+                lists.append(code, ["jump_false", 0])
+                lists.append(frames, {"kind":"while", "begin":begin, "false":endjump, "breaks":[], "continues":[]})
+            end
             if command == "repeat"
                 handled = true
                 let name = "@loop" + str(line_number)
@@ -804,7 +818,7 @@ function compile_source(source)
                 let loop = null
                 for j in range(0, len(frames))
                     let frame = frames[len(frames) - j - 1]
-                    if frame.kind == "repeat" or frame.kind == "for"
+                    if frame.kind == "repeat" or frame.kind == "while" or frame.kind == "for"
                         loop = frame
                         break
                     end
@@ -852,6 +866,16 @@ function compile_source(source)
                         code[index][1] = len(code)
                     end
                     lists.append(code, ["iter_end", frame.name])
+                end
+                if frame.kind == "while"
+                    for index in frame.continues
+                        code[index][1] = frame.begin
+                    end
+                    lists.append(code, ["jump", frame.begin])
+                    code[frame.false][1] = len(code)
+                    for index in frame.breaks
+                        code[index][1] = len(code)
+                    end
                 end
                 if frame.kind == "repeat"
                     let update_at = len(code)

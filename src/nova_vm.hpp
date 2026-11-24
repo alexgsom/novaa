@@ -73,6 +73,15 @@ class NovaBytecodeVM {
     return Value(std::trunc(n));
   }
   Value builtinCall(const std::string& name,const std::vector<Value>& args,size_t pc) {
+    // Match the source interpreter's ask(): prompt is flushed before reading stdin.
+    // The IDE's interactive Run connects this stdin to its terminal input field.
+    if(name=="ask"||name=="запитай"||name=="zapytaj"){
+      if(args.size()>1)throw error(pc,"ask expects zero or one argument");
+      if(!args.empty())std::cout<<args[0].repr()<<std::flush;
+      std::string answer;
+      if(!std::getline(std::cin,answer))std::cin.clear();
+      return Value(answer);
+    }
     if(name=="range"){
       if(args.empty()||args.size()>3)throw error(pc,"range expects 1..3 integer arguments");
       std::vector<long long> ints;
@@ -305,7 +314,8 @@ private:
         if(count>stack.size())throw error(pc,"stack underflow in call");
         std::vector<Value> args(count);
         for(size_t i=count;i>0;--i)args[i-1]=pop(pc);
-        if(name=="str"||name=="int"||name=="float"||name=="len"||name=="range"){
+        if(name=="str"||name=="int"||name=="float"||name=="len"||name=="range"||
+           name=="ask"||name=="запитай"||name=="zapytaj"){
           push(builtinCall(name,args,pc),pc);++pc;continue;
         }
         auto dot=name.find('.');

@@ -1,0 +1,19 @@
+# Generated with Nova Studio visual designer. Review code before running.
+import ui
+
+let app = ui.window("Nova Designer Demo", 780, 520)
+
+function on_button_3()
+    ui.alert("Nova", "Click me")
+end
+
+let control_1 = ui.label(app, "Welcome to Nova")
+ui.place(control_1, 20, 20, 280, 32)
+
+let control_2 = ui.input(app, "Your name")
+ui.place(control_2, 20, 70, 210, 32)
+
+let control_3 = ui.button(app, "Click me", on_button_3)
+ui.place(control_3, 20, 125, 145, 40)
+
+ui.run(app)

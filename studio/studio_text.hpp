@@ -38,7 +38,8 @@ inline wchar_t lower(wchar_t c) {
 inline bool wordChar(wchar_t c) {
   return c==L'_' || (c>=L'0'&&c<=L'9') || (c>=L'A'&&c<=L'Z') ||
          (c>=L'a'&&c<=L'z') || (c>=0x0400&&c<=0x052F) ||
-         (c>=0x0100&&c<=0x024F) || std::iswalnum(c);
+         (c>=0x00C0&&c<=0x00D6) || (c>=0x00D8&&c<=0x00F6) ||
+         (c>=0x00F8&&c<=0x024F) || std::iswalnum(c);
 }
 inline bool equalAt(std::wstring_view text,std::wstring_view query,size_t pos,bool sensitive){
   if(query.empty() || pos>text.size() || query.size()>text.size()-pos)return false;
@@ -89,6 +90,54 @@ inline ReplaceResult replaceAll(std::wstring_view text,std::wstring_view from,st
   if(out.size()>maxChars)throw std::length_error("Replacement exceeds maximum document size");
   return {std::move(out),count};
 }
+struct LineEdit {size_t begin=0, end=0; std::wstring replacement; bool changed=false;};
+// Toggle the selected lines, ignoring blank lines. A selection ending just after
+// a newline belongs to the preceding line, not the following one.
+inline LineEdit toggleLineComments(std::wstring_view doc,size_t start,size_t finish,
+                                   size_t maxChars=4*1024*1024){
+  start=std::min(start,doc.size());finish=std::min(finish,doc.size());
+  if(start>finish)std::swap(start,finish);
+  size_t begin=0;
+  if(start){auto previous=doc.rfind(L'\n',start-1);
+    begin=previous==std::wstring_view::npos?0:previous+1;}
+  size_t last=start==finish?start:finish-1;
+  if(last<doc.size() && (doc[last]==L'\n'||doc[last]==L'\r') && last>0)--last;
+  auto newline=doc.find(L'\n',last);
+  size_t end=newline==std::wstring_view::npos?doc.size():newline+1;
+  if(end<begin)end=begin;
+  // All nonempty selected lines must be commented before we remove comments.
+  bool any=false, allCommented=true;
+  for(size_t line=begin;line<end;){
+    size_t tail=doc.find(L'\n',line);tail=tail==std::wstring_view::npos?end:std::min(end,tail+1);
+    size_t contentEnd=tail;
+    while(contentEnd>line && (doc[contentEnd-1]==L'\r'||doc[contentEnd-1]==L'\n'))--contentEnd;
+    size_t first=line;
+    while(first<contentEnd && (doc[first]==L' '||doc[first]==L'	'))++first;
+    if(first<contentEnd){any=true;if(doc[first]!=L'#')allCommented=false;}
+    line=tail;
+  }
+  if(!any)return {begin,end,std::wstring(doc.substr(begin,end-begin)),false};
+  std::wstring out;out.reserve(end-begin+16);
+  for(size_t line=begin;line<end;){
+    size_t tail=doc.find(L'\n',line);tail=tail==std::wstring_view::npos?end:std::min(end,tail+1);
+    size_t contentEnd=tail;
+    while(contentEnd>line && (doc[contentEnd-1]==L'\r'||doc[contentEnd-1]==L'\n'))--contentEnd;
+    size_t first=line;
+    while(first<contentEnd && (doc[first]==L' '||doc[first]==L'	'))++first;
+    out.append(doc.substr(line,first-line));
+    if(first<contentEnd){
+      if(allCommented){
+        size_t next=first+1;
+        if(next<contentEnd&&doc[next]==L' ')++next;
+        out.append(doc.substr(next,tail-next));
+      }else{out+=L"# ";out.append(doc.substr(first,tail-first));}
+    }else out.append(doc.substr(first,tail-first));
+    line=tail;
+  }
+  if(doc.size()-(end-begin)+out.size()>maxChars)
+    throw std::length_error("Commenting exceeds maximum document size");
+  return {begin,end,std::move(out),true};
+}
 inline std::pair<size_t,size_t> lineColumn(std::wstring_view text,size_t offset){
   offset=std::min(offset,text.size());size_t line=1,col=1;
   for(size_t i=0;i<offset;++i){
@@ -102,7 +151,7 @@ inline bool isKeyword(std::wstring_view word){
   constexpr std::wstring_view names[]={
     L"let",L"show",L"ask",L"if",L"else",L"end",L"repeat",L"for",L"in",L"function",L"return",L"import",L"as",
     L"try",L"catch",L"match",L"case",L"break",L"continue",L"assert",L"raise",L"type",L"while",L"and",L"or",L"not",
-    L"true",L"false",L"null",L"нехай",L"покажи",L"запитай",L"якщо",L"інакше",L"кінець",L"повтори",
+    L"true",L"false",L"null",L"поки",L"dopóki",L"нехай",L"покажи",L"запитай",L"якщо",L"інакше",L"кінець",L"повтори",
     L"для",L"в",L"функція",L"поверни",L"спробуй",L"злови",L"випадок",L"зупини",L"продовж",
     L"niech",L"pokaż",L"zapytaj",L"jeśli",L"inaczej",L"koniec",L"powtórz",L"dla",L"w",
     L"funkcja",L"zwróć",L"spróbuj",L"złap",L"przypadek"
