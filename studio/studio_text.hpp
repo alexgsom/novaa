@@ -23,9 +23,15 @@ inline wchar_t lower(wchar_t c) {
   if(c>=0x0410 && c<=0x042F) return c+32; // А..Я
   if(c>=0x0400 && c<=0x040F) return c+80; // Є, І, Ї, Ґ etc.
   switch(c) {
-    case L'Ą': return L'ą'; case L'Ć':return L'ć'; case L'Ę':return L'ę';
-    case L'Ł':return L'ł'; case L'Ń':return L'ń'; case L'Ó':return L'ó';
-    case L'Ś':return L'ś'; case L'Ź':return L'ź'; case L'Ż':return L'ż';
+    case L'\u0104': return L'\u0105'; // Ą → ą
+    case L'\u0106': return L'\u0107'; // Ć → ć
+    case L'\u0118': return L'\u0119'; // Ę → ę
+    case L'\u0141': return L'\u0142'; // Ł → ł
+    case L'\u0143': return L'\u0144'; // Ń → ń
+    case L'\u00D3': return L'\u00F3'; // Ó → ó
+    case L'\u015A': return L'\u015B'; // Ś → ś
+    case L'\u0179': return L'\u017A'; // Ź → ź
+    case L'\u017B': return L'\u017C'; // Ż → ż
     default: return std::towlower(c);
   }
 }
