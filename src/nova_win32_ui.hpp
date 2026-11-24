@@ -78,7 +78,7 @@ public:
     if(mainWindow&&IsWindow(mainWindow))throw std::runtime_error("Only one Nova window is supported in Native 0.4");
     if(width<200||width>3000||height<120||height>2200)throw std::runtime_error("Window size out of range");
     WNDCLASSW wc{};wc.lpfnWndProc=windowProc;wc.hInstance=GetModuleHandleW(nullptr);
-    wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);
+    wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(OCR_NORMAL);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);
     wc.lpszClassName=L"NovaNativeWindow03";
     if(!RegisterClassW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)throw std::runtime_error("Win32: cannot register window class");
     auto caption=novaToWide(title);
