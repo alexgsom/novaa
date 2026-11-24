@@ -1,4 +1,4 @@
-// Nova Studio 3.0 Preview (Update 19): professional editor, project AI proof, modern designer.
+// Nova Studio 4.0: command center, project X-Ray, Quality Gate and Time Machine.
 // Preserves the restrained dark design of Nova Studio Next (no neon/cyberpunk redesign).
 // Requires the prebuilt native Nova runtime and the Nova-authored .nbc compiler.
 #define UNICODE
@@ -31,6 +31,9 @@
 #include "studio_living17.hpp"
 #include "studio_aiproof18.hpp"
 #include "studio_next19.hpp"
+#include "studio_hyper40.hpp"
+#include "studio_time_machine40.hpp"
+#include "studio_forge40.hpp"
 #include <set>
 namespace fs=std::filesystem;
 static constexpr UINT JOB_DONE=WM_APP+77, AI_DONE=WM_APP+78, JOB_OUTPUT=WM_APP+80,
@@ -38,7 +41,7 @@ static constexpr UINT JOB_DONE=WM_APP+77, AI_DONE=WM_APP+78, JOB_OUTPUT=WM_APP+8
 static constexpr int ID_EDITOR=101,ID_OUTPUT=102,ID_STATUS=103;
 static constexpr int ID_PROJECT_LIST=110, ID_AI_INPUT=111, ID_AI_LOG=112, ID_TABS=113, ID_PROBLEMS=114;
 static constexpr int ID_NEW=201,ID_OPEN=202,ID_SAVE=203,ID_SAVE_AS=204,ID_CHECK=205,ID_RUN=206,ID_BUILD=207,ID_BUILD_GUI=208,ID_STOP=209,ID_ABOUT=210,ID_FIND=211,ID_REPLACE=212,ID_NEXT=213,ID_PREVIOUS=214,ID_TOGGLE_COMMENT=215;
-static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238,ID_FORMAT_SPACE=239,ID_INDENT=240,ID_OUTDENT=241;
+static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238,ID_FORMAT_SPACE=239,ID_INDENT=240,ID_OUTDENT=241,ID_XRAY=242,ID_QUALITY_GATE=243,ID_CHECKPOINT=244,ID_RESTORE_CHECKPOINT=245,ID_FORGE=246;
 static constexpr size_t MAX_FILE=4*1024*1024;
 static constexpr COLORREF SHELL_BG=RGB(17,21,28),PANEL_BG=RGB(26,32,41),EDIT_BG=RGB(20,25,33);
 static constexpr COLORREF FOREGROUND=RGB(235,239,245),MUTED=RGB(150,162,178),ACCENT=RGB(104,139,235);
@@ -102,6 +105,12 @@ class Studio{
   HWND terminalInput=nullptr,btnTerminalSend=nullptr,btnDesigner=nullptr,btnAiProject=nullptr;
   HWND aiTitle=nullptr,aiLog=nullptr,aiInput=nullptr,aiPrivacy=nullptr;
   HWND gutter=nullptr,miniMap=nullptr,projectSearch=nullptr,searchHitsList=nullptr,btnAiMulti=nullptr;
+  HWND paletteWindow=nullptr,paletteEdit=nullptr,paletteList=nullptr;
+  WNDPROC paletteOriginalEdit=nullptr,paletteOriginalList=nullptr;
+  std::vector<nova_hyper40::Item> paletteItems;
+  std::vector<nova_hyper40::Scored> paletteMatches;
+  bool showingXray=false;
+  std::vector<nova_hyper40::Issue> xrayIssues;
   std::vector<nova_next19::Hit> projectHits;
   std::vector<nova_next19::MiniLine> miniCache;
   size_t miniLineCount=0;
@@ -114,6 +123,7 @@ class Studio{
   HWND btnProject=nullptr,btnOpen=nullptr,btnQuick=nullptr;
   HWND btnAiAsk=nullptr,btnAiExplain=nullptr,btnAiFix=nullptr,btnAiCopy=nullptr;
   HWND btnSave=nullptr,btnRun=nullptr,btnCompile=nullptr,btnBuild=nullptr,btnStop=nullptr;
+  HWND btnXray=nullptr,btnGate=nullptr,btnForge=nullptr;
   HFONT font=nullptr,uiFont=nullptr,headingFont=nullptr;
   HBRUSH shellBrush=nullptr,panelBrush=nullptr,editBrush=nullptr;
   HACCEL accelerators=nullptr;HMODULE richLibrary=nullptr;
@@ -327,7 +337,7 @@ class Studio{
   void newDocument(bool sample=false){
     if(documents.size()>=32){error(L"Maximum 32 open files");return;}
     if(!documents.empty())captureDocument();
-    const auto content=sample?L"# Nova Studio Next\r\nshow \"Привіт, Nova!\"\r\n":L"";
+    const auto content=sample?L"# Nova Studio 4\r\nshow \"Привіт, Nova!\"\r\n":L"";
     documents.push_back({nextDocId++,{},content,false,0,0});
     activeDoc=documents.size()-1;
     loading=true;file.clear();dirty=false;SetWindowTextW(editor,content);loading=false;
@@ -354,7 +364,7 @@ class Studio{
     return true;
   }
   void setTitle(){auto name=file.empty()?L"Untitled.nova":file.filename().wstring();
-    SetWindowTextW(mainWindow,(name+(dirty?L" *":L"")+L" - Nova Studio Next").c_str());
+    SetWindowTextW(mainWindow,(name+(dirty?L" *":L"")+L" - Nova Studio 4.0").c_str());
     if(editorTitle)SetWindowTextW(editorTitle,(L"EDITOR  /  "+name+(dirty?L"  •":L"")).c_str());
   }
   void updateStatus(){
@@ -626,6 +636,7 @@ class Studio{
     }
   }
   void populateProblems(const std::wstring& text){
+    showingXray=false;xrayIssues.clear();
     diagnostics=nova_studio::parseDiagnostics(text);
     if(!problems)return;
     SendMessageW(problems,LB_RESETCONTENT,0,0);
@@ -638,6 +649,16 @@ class Studio{
     RECT rc{};GetClientRect(mainWindow,&rc);relayout(rc.right,rc.bottom);
   }
   void goToProblem(){
+    if(showingXray){
+      const int selected=(int)SendMessageW(problems,LB_GETCURSEL,0,0);
+      if(selected<0||(size_t)selected>=xrayIssues.size())return;
+      const auto issue=xrayIssues[(size_t)selected];
+      if(projectRoot.empty())return;
+      const auto target=projectRoot/fs::path(issue.path);
+      loadFile(target);
+      if(file==target&&issue.line)goToLine(issue.line);
+      return;
+    }
     const int index=(int)SendMessageW(problems,LB_GETCURSEL,0,0);
     if(index<0||(size_t)index>=diagnostics.size())return;
     if(problemDocumentId){
@@ -728,7 +749,10 @@ class Studio{
       std::error_code ec;
       fs::recursive_directory_iterator it(projectRoot,fs::directory_options::skip_permission_denied,ec),last;
       for(;!ec && it!=last && projectFiles.size()<500;it.increment(ec)){
-        if(it.depth()>8){it.disable_recursion_pending();continue;}
+        if(it.depth()>8 || (it->is_directory(ec) &&
+          (it->path().filename()==L".nova-history"||it->path().filename()==L".git"||it->path().filename()==L"build"))){
+          it.disable_recursion_pending();continue;}
+        if(it->is_symlink(ec)){if(it->is_directory(ec))it.disable_recursion_pending();continue;}
         if(it->is_regular_file(ec)&&it->path().extension()==L".nova")projectFiles.push_back(it->path());
       }
       std::sort(projectFiles.begin(),projectFiles.end());
@@ -774,8 +798,9 @@ class Studio{
     const int outputHeight=std::max(145,std::min(230,(bottom-top)/3));
     const int outputTop=bottom-outputHeight;
     struct Item {HWND h;int size;};
-    const Item toolbar[]={{btnProject,100},{btnOpen,68},{btnSave,68},{btnRun,90},
-                          {btnCompile,88},{btnBuild,94},{btnStop,66},{btnQuick,108},{btnDesigner,108}};
+    const Item toolbar[]={{btnQuick,160},{btnProject,85},{btnForge,83},{btnSave,67},{btnRun,85},
+                          {btnXray,82},{btnGate,98},{btnDesigner,108},{btnCompile,88},
+                          {btnBuild,92},{btnStop,68}};
     int x=pad;
     for(const auto& item:toolbar){
       if(!item.h)continue;
@@ -806,7 +831,7 @@ class Studio{
     MoveWindow(terminalInput,centerX,terminalTop,std::max(100,centerWidth-118),30,TRUE);
     MoveWindow(btnTerminalSend,centerX+centerWidth-110,terminalTop,110,30,TRUE);
     const int usable=std::max(58,terminalTop-outputTop-28);
-    if(diagnostics.empty()){
+    if(diagnostics.empty()&&!showingXray){
       MoveWindow(output,centerX,outputTop+28,centerWidth,usable,TRUE);
       ShowWindow(problems,SW_HIDE);
     }else{
@@ -1256,36 +1281,314 @@ class Studio{
       if(PostMessageW(mainWindow,AI_DONE,0,(LPARAM)result.get()))result.release();
     });
   }
-  void quickActions(){
+  // NOVA FORGE: create a complete, fully local starter app in an empty directory.
+  void openNovaForge(){
     HMENU menu=CreatePopupMenu();
-    AppendMenuW(menu,MF_STRING,ID_NEW,L"New file     Ctrl+N");
-    AppendMenuW(menu,MF_STRING,ID_OPEN,L"Open file     Ctrl+O");
-    AppendMenuW(menu,MF_STRING,ID_PROJECT_OPEN,L"Open project folder");
-    AppendMenuW(menu,MF_STRING,ID_TAB_NEXT,L"Next tab     Ctrl+Tab");
-    AppendMenuW(menu,MF_STRING,ID_TAB_CLOSE,L"Close tab     Ctrl+W");
-    AppendMenuW(menu,MF_STRING,ID_COMPLETE,L"Complete keyword/function     Ctrl+Space");
-    AppendMenuW(menu,MF_STRING,ID_SYMBOLS,L"Go to function     Ctrl+Shift+O");
-    AppendMenuW(menu,MF_STRING,ID_PROJECT_SEARCH,L"Search project     Ctrl+Shift+F");
-    AppendMenuW(menu,MF_STRING,ID_DESIGNER,L"Visual app designer");
-    AppendMenuW(menu,MF_STRING,ID_DESIGNER_EDIT,L"Edit existing designer form");
-    AppendMenuW(menu,MF_STRING,ID_TRINITY_UK,L"Trinity: Ukrainian source view");
-    AppendMenuW(menu,MF_STRING,ID_TRINITY_PL,L"Trinity: Polish source view");
-    AppendMenuW(menu,MF_STRING,ID_TRINITY_EN,L"Trinity: English source view");
-    AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
-    AppendMenuW(menu,MF_STRING,ID_RUN,L"Run program     F5");
-    AppendMenuW(menu,MF_STRING,ID_CHECK,L"Compile program     F6");
-    AppendMenuW(menu,MF_STRING,ID_BUILD,L"Build EXE     F7");
-    AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
-    AppendMenuW(menu,MF_STRING,ID_AI_EXPLAIN,L"AI: Explain selection");
-    AppendMenuW(menu,MF_STRING,ID_AI_FIX,L"AI: Fix selection");
-    AppendMenuW(menu,MF_STRING,ID_AI_PREVIEW,L"AI: Preview / Apply reviewed fix");
-    AppendMenuW(menu,MF_STRING,ID_AI_PROJECT,L"AI: Create draft app");
-    AppendMenuW(menu,MF_STRING,ID_AI_MULTI,L"AI: Propose project changes");
-    RECT r{};GetWindowRect(btnQuick,&r);
-    int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN|TPM_TOPALIGN,r.left,r.bottom,0,mainWindow,nullptr);
+    AppendMenuW(menu,MF_STRING,4800,L"Counter  /  native Windows GUI");
+    AppendMenuW(menu,MF_STRING,4801,L"Notes  /  GUI + local storage");
+    AppendMenuW(menu,MF_STRING,4802,L"Tasks  /  persistent CLI + JSON");
+    POINT point{};GetCursorPos(&point);
+    const int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN,point.x,point.y,0,mainWindow,nullptr);
     DestroyMenu(menu);
-    if(choice)SendMessageW(mainWindow,WM_COMMAND,MAKEWPARAM(choice,0),0);
+    if(choice<4800||choice>4802)return;
+    const auto selected=(nova_forge40::Blueprint)(choice-4800);
+    HRESULT initialized=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE);
+    const bool ready=SUCCEEDED(initialized);
+    BROWSEINFOW bi{};bi.hwndOwner=mainWindow;
+    bi.lpszTitle=L"Choose an EMPTY folder for the new Nova project (create a new folder here if needed)";
+    bi.ulFlags=BIF_RETURNONLYFSDIRS|(ready?BIF_NEWDIALOGSTYLE:0);
+    PIDLIST_ABSOLUTE folder=SHBrowseForFolderW(&bi);
+    wchar_t chosen[MAX_PATH+1]{};
+    const bool okay=folder&&SHGetPathFromIDListW(folder,chosen)!=FALSE;
+    if(folder)CoTaskMemFree(folder);
+    if(ready)CoUninitialize();
+    if(!okay)return;
+    const fs::path dest(chosen);
+    if(!nova_forge40::create(dest,selected)){
+      error(L"Nova Forge could not create the project. Choose an existing EMPTY folder that is not a symbolic link. No existing files were replaced.");
+      return;
+    }
+    projectRoot=dest;refreshProject();loadFile(dest/L"main.nova");
+    setStatus(L"Nova Forge created a fresh local project. Press F6 to compile.");
   }
+  // PROJECT X-RAY: offline file-level analysis, never runs or uploads user code.
+  void projectXray(){
+    if(projectRoot.empty()){chooseProject();if(projectRoot.empty())return;}
+    refreshProject();
+    std::vector<nova_hyper40::Source> sources;
+    size_t total=0;
+    for(const auto& path:projectFiles){
+      if(sources.size()>=250||total>=4*1024*1024)break;
+      try{
+        if(fs::is_symlink(path)||fs::file_size(path)>256*1024)continue;
+        std::ifstream in(path,std::ios::binary);
+        std::string bytes((std::istreambuf_iterator<char>(in)),std::istreambuf_iterator<char>());
+        if(bytes.size()>4*1024*1024-total)break;
+        if(bytes.compare(0,3,"\xef\xbb\xbf")==0)bytes.erase(0,3);
+        if(bytes.find('\0')!=std::string::npos)continue;
+        auto value=toWide(bytes);
+        sources.push_back({path.lexically_relative(projectRoot).generic_wstring(),std::move(value)});
+        total+=bytes.size();
+      }catch(...){continue;}
+    }
+    const auto report=nova_hyper40::inspect(sources);
+    xrayIssues=report.issues;showingXray=!xrayIssues.empty();diagnostics.clear();problemDocumentId=0;
+    SetWindowTextW(output,nova_hyper40::formatReport(report).c_str());
+    SendMessageW(problems,LB_RESETCONTENT,0,0);
+    for(const auto& issue:xrayIssues){
+      const auto label=(issue.warning?L"!  ":L"•  ")+issue.path+L":"+
+        std::to_wstring(issue.line)+L"  "+issue.message;
+      SendMessageW(problems,LB_ADDSTRING,0,(LPARAM)label.c_str());
+    }
+    if(outputTitle)SetWindowTextW(outputTitle,(L"PROJECT X-RAY  /  "+std::to_wstring(report.files)+
+      L" files  •  "+std::to_wstring(report.issues.size())+L" findings").c_str());
+    refreshLayout();
+    setStatus(L"X-Ray complete (offline). Double-click a finding to open its source line.");
+  }
+  void createCheckpoint(){
+    if(file.empty()){setStatus(L"Save the .nova file before creating its first checkpoint");return;}
+    if(projectRoot.empty())projectRoot=file.parent_path();
+    try{
+      const auto before=toUtf8(editorText(editor));
+      const auto saved=nova_time40::checkpoint(projectRoot,file,before);
+      if(!saved){error(L"Cannot write checkpoint: ensure the file is inside the project folder.");return;}
+      setStatus(L"Local checkpoint saved: "+saved->filename().wstring()+L" (max 12 per file)");
+    }catch(const std::exception& e){error(L"Checkpoint error: "+toWide(e.what()));}
+  }
+  void restoreCheckpoint(){
+    if(file.empty()){setStatus(L"Open a saved .nova file first");return;}
+    const auto versions=nova_time40::list(projectRoot.empty()?file.parent_path():projectRoot,file);
+    if(versions.empty()){setStatus(L"No local checkpoints for this file");return;}
+    HMENU menu=CreatePopupMenu();
+    for(size_t i=0;i<versions.size()&&i<12;++i)
+      AppendMenuW(menu,MF_STRING,4700+(UINT)i,versions[i].stem().wstring().c_str());
+    POINT point{};GetCursorPos(&point);
+    const int selected=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN,point.x,point.y,0,mainWindow,nullptr);
+    DestroyMenu(menu);
+    if(selected<4700||(size_t)(selected-4700)>=versions.size())return;
+    try{
+      auto loaded=nova_time40::read(projectRoot.empty()?file.parent_path():projectRoot,file,versions[(size_t)(selected-4700)]);
+      if(!loaded){error(L"Cannot safely read the selected checkpoint.");return;}
+      auto restored=toWide(*loaded);const auto current=editorText(editor);
+      if(restored==current){setStatus(L"This checkpoint matches the current editor");return;}
+      if(MessageBoxW(mainWindow,L"Restore this version into the editor?\n\n"
+          L"The current editor content is checkpointed first. Your on-disk source is NOT overwritten. "
+          L"Review and Save to keep the restored version.",L"Nova Time Machine",
+          MB_YESNO|MB_ICONQUESTION)!=IDYES)return;
+      if(!nova_time40::checkpoint(projectRoot.empty()?file.parent_path():projectRoot,file,toUtf8(current))){
+        error(L"Could not save safety checkpoint. Restore aborted.");return;
+      }
+      SendMessageW(editor,EM_SETSEL,0,-1);
+      SendMessageW(editor,EM_REPLACESEL,TRUE,(LPARAM)restored.c_str());
+      dirty=true;if(!documents.empty())documents[activeDoc].modified=true;
+      refreshTabs();setTitle();setStatus(L"Checkpoint loaded into editor (unsaved). Ctrl+Z to undo.");
+      SetFocus(editor);
+    }catch(const std::exception& e){error(L"Restore failed: "+toWide(e.what()));}
+  }
+  void projectQualityGate(){
+    if(busy){setStatus(L"A build or verification is already running");return;}
+    if(projectRoot.empty()){chooseProject();if(projectRoot.empty())return;}
+    if(dirty&&!saveFile(false))return;
+    refreshProject();
+    std::vector<fs::path> targets;
+    for(const auto& path:projectFiles){
+      try{if(!fs::is_symlink(path)&&fs::file_size(path)<=256*1024)targets.push_back(path);}catch(...){ }
+      if(targets.size()>=100)break;
+    }
+    if(targets.empty()){setStatus(L"Quality Gate: no eligible .nova files found");return;}
+    if(!fs::exists(runtime)||!fs::exists(compiler)){
+      error(L"Quality Gate requires bin/nova-native.exe and compiler/novac_selfhost.nbc");return;}
+    if(task.joinable())task.join();busy=true;cancelled=false;
+    const auto checkedRoot=projectRoot;
+    SetWindowTextW(output,L"NOVA QUALITY GATE\r\nCompile-only verification of the selected project...\r\n");
+    setStatus(L"Quality Gate running (compile only; press Stop to cancel)");
+    task=std::thread([this,targets,checkedRoot](){
+      std::unique_ptr<Result> result(new Result());size_t pass=0,fail=0;
+      result->text=L"NOVA QUALITY GATE  /  compile-only\r\n\r\n";
+      for(const auto& source:targets){
+        if(cancelled.load())break;
+        fs::path compiled;
+        try{
+          wchar_t tempPath[MAX_PATH+1]{},name[MAX_PATH+1]{};
+          DWORD len=GetTempPathW(MAX_PATH,tempPath);
+          if(len==0||len>MAX_PATH||!GetTempFileNameW(tempPath,L"NQG",0,name))
+            throw std::runtime_error("Cannot create temporary bytecode file");
+          compiled=name;compiled+=L".nbc";DeleteFileW(name);
+          const auto run=spawn(runtime,{L"exec",compiler.wstring(),L"--max-steps",L"15000000",
+                    L"--",source.wstring(),compiled.wstring()},source.parent_path());
+          const auto rel=source.lexically_relative(checkedRoot).generic_wstring();
+          if(run.exit==0){++pass;result->text+=L"[PASS]  "+rel+L"\r\n";}
+          else{
+            ++fail;result->text+=L"[FAIL]  "+rel+L"\r\n"+run.output.substr(0,1200)+L"\r\n";
+          }
+        }catch(const std::exception& e){
+          ++fail;result->text+=L"[FAIL]  "+source.filename().wstring()+L"  "+toWide(e.what())+L"\r\n";
+        }
+        std::error_code ec;if(!compiled.empty())fs::remove(compiled,ec);
+        const auto progress=L"[Gate] "+std::to_wstring(pass+fail)+L"/"+
+          std::to_wstring(targets.size())+L"  "+source.filename().wstring()+L"\r\n";
+        auto* packet=new std::wstring(progress);
+        if(!PostMessageW(mainWindow,JOB_OUTPUT,0,(LPARAM)packet))delete packet;
+        if(result->text.size()>70000){result->text+=L"[Output limit reached]\r\n";break;}
+      }
+      result->code=fail?1:0;result->stopped=cancelled.load();
+      result->text=L"FILES PASSED: "+std::to_wstring(pass)+L"\r\nFILES FAILED: "+
+        std::to_wstring(fail)+L"\r\n"+(result->stopped?L"STOPPED BY USER\r\n":L"")+L"\r\n"+result->text+
+        L"\r\nNo generated bytecode was executed. This is not an integration test.\r\n";
+      if(PostMessageW(mainWindow,JOB_DONE,0,(LPARAM)result.get()))result.release();
+    });
+  }
+  static LRESULT CALLBACK paletteEditProc(HWND h,UINT msg,WPARAM wp,LPARAM lp){
+    auto* studio=(Studio*)GetWindowLongPtrW(h,GWLP_USERDATA);
+    if(studio&&msg==WM_KEYDOWN){
+      if(wp==VK_ESCAPE){ShowWindow(studio->paletteWindow,SW_HIDE);SetFocus(studio->editor);return 0;}
+      if(wp==VK_RETURN){studio->executePalette();return 0;}
+      if(wp==VK_DOWN||wp==VK_UP){
+        int count=(int)SendMessageW(studio->paletteList,LB_GETCOUNT,0,0);
+        int index=(int)SendMessageW(studio->paletteList,LB_GETCURSEL,0,0);
+        if(count>0){index=std::clamp(index+(wp==VK_DOWN?1:-1),0,count-1);
+          SendMessageW(studio->paletteList,LB_SETCURSEL,(WPARAM)index,0);}
+        return 0;
+      }
+    }
+    return studio&&studio->paletteOriginalEdit?
+      CallWindowProcW(studio->paletteOriginalEdit,h,msg,wp,lp):DefWindowProcW(h,msg,wp,lp);
+  }
+  static LRESULT CALLBACK paletteListProc(HWND h,UINT msg,WPARAM wp,LPARAM lp){
+    auto* studio=(Studio*)GetWindowLongPtrW(h,GWLP_USERDATA);
+    if(studio&&msg==WM_KEYDOWN){
+      if(wp==VK_RETURN){studio->executePalette();return 0;}
+      if(wp==VK_ESCAPE){ShowWindow(studio->paletteWindow,SW_HIDE);SetFocus(studio->editor);return 0;}
+    }
+    return studio&&studio->paletteOriginalList?
+      CallWindowProcW(studio->paletteOriginalList,h,msg,wp,lp):DefWindowProcW(h,msg,wp,lp);
+  }
+  static LRESULT CALLBACK paletteWndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp){
+    auto* studio=(Studio*)GetWindowLongPtrW(h,GWLP_USERDATA);
+    if(msg==WM_NCCREATE){studio=(Studio*)((CREATESTRUCTW*)lp)->lpCreateParams;
+      SetWindowLongPtrW(h,GWLP_USERDATA,(LONG_PTR)studio);}
+    if(!studio)return DefWindowProcW(h,msg,wp,lp);
+    switch(msg){
+      case WM_CREATE:{
+        studio->paletteEdit=CreateWindowExW(0,L"EDIT",L"",WS_CHILD|WS_VISIBLE|ES_AUTOHSCROLL,
+          16,15,560,34,h,(HMENU)3901,GetModuleHandleW(nullptr),nullptr);
+        studio->paletteList=CreateWindowExW(0,L"LISTBOX",L"",WS_CHILD|WS_VISIBLE|LBS_NOTIFY|
+          LBS_NOINTEGRALHEIGHT|WS_VSCROLL,16,58,560,290,h,(HMENU)3902,GetModuleHandleW(nullptr),nullptr);
+        applyFont(studio->paletteEdit,studio->headingFont);
+        applyFont(studio->paletteList,studio->uiFont);
+        studio->paletteOriginalEdit=(WNDPROC)SetWindowLongPtrW(studio->paletteEdit,GWLP_WNDPROC,
+          (LONG_PTR)paletteEditProc);
+        SetWindowLongPtrW(studio->paletteEdit,GWLP_USERDATA,(LONG_PTR)studio);
+        studio->paletteOriginalList=(WNDPROC)SetWindowLongPtrW(studio->paletteList,GWLP_WNDPROC,
+          (LONG_PTR)paletteListProc);
+        SetWindowLongPtrW(studio->paletteList,GWLP_USERDATA,(LONG_PTR)studio);
+        SendMessageW(studio->paletteEdit,EM_SETCUEBANNER,0,(LPARAM)L"Type a command, file or function...");
+        return 0;
+      }
+      case WM_COMMAND:
+        if(LOWORD(wp)==3901&&HIWORD(wp)==EN_CHANGE){studio->refreshPalette();return 0;}
+        if(LOWORD(wp)==3902&&HIWORD(wp)==LBN_DBLCLK){studio->executePalette();return 0;}
+        break;
+      case WM_KEYDOWN:
+        if(wp==VK_ESCAPE){ShowWindow(h,SW_HIDE);SetFocus(studio->editor);return 0;}
+        if(wp==VK_RETURN){studio->executePalette();return 0;}
+        break;
+      case WM_ACTIVATE:
+        if(LOWORD(wp)==WA_INACTIVE)ShowWindow(h,SW_HIDE);
+        return 0;
+      case WM_CTLCOLORLISTBOX:case WM_CTLCOLOREDIT:{
+        HDC dc=(HDC)wp;SetTextColor(dc,FOREGROUND);SetBkColor(dc,EDIT_BG);return (LRESULT)studio->editBrush;
+      }
+      case WM_ERASEBKGND:{
+        RECT rc{};GetClientRect(h,&rc);FillRect((HDC)wp,&rc,studio->panelBrush);return 1;
+      }
+      case WM_CLOSE:ShowWindow(h,SW_HIDE);return 0;
+      case WM_DESTROY:studio->paletteWindow=nullptr;studio->paletteEdit=nullptr;
+        studio->paletteList=nullptr;studio->paletteOriginalEdit=nullptr;studio->paletteOriginalList=nullptr;return 0;
+    }
+    return DefWindowProcW(h,msg,wp,lp);
+  }
+  void refreshPalette(){
+    if(!paletteEdit||!paletteList)return;
+    wchar_t buffer[105]{};GetWindowTextW(paletteEdit,buffer,105);
+    paletteMatches=nova_hyper40::filter(buffer,paletteItems,45);
+    SendMessageW(paletteList,LB_RESETCONTENT,0,0);
+    for(auto match:paletteMatches){
+      const auto& item=paletteItems[match.index];
+      const auto display=item.label+L"     ·     "+item.detail;
+      SendMessageW(paletteList,LB_ADDSTRING,0,(LPARAM)display.c_str());
+    }
+    if(!paletteMatches.empty())SendMessageW(paletteList,LB_SETCURSEL,0,0);
+  }
+  void executePalette(){
+    if(!paletteList||!paletteWindow)return;
+    const int selected=(int)SendMessageW(paletteList,LB_GETCURSEL,0,0);
+    if(selected<0||(size_t)selected>=paletteMatches.size())return;
+    const auto item=paletteItems[paletteMatches[(size_t)selected].index];
+    ShowWindow(paletteWindow,SW_HIDE);
+    if(item.type==nova_hyper40::ItemType::Action)
+      SendMessageW(mainWindow,WM_COMMAND,MAKEWPARAM(item.action,0),0);
+    else if(item.type==nova_hyper40::ItemType::File){
+      fs::path target(item.path);
+      if(!target.is_absolute())target=projectRoot/target;
+      loadFile(target);
+    }else if(item.type==nova_hyper40::ItemType::Symbol)goToLine(item.line);
+  }
+  void openCommandCenter(){
+    paletteItems.clear();
+    using nova_hyper40::ItemType;
+    const struct {const wchar_t* label,*detail;int command;} actions[]={
+      {L"Nova Forge: New project",L"Counter, Notes or CLI task blueprint",ID_FORGE},
+      {L"Project X-Ray",L"Offline code intelligence",ID_XRAY},
+      {L"Quality Gate",L"Compile every project file",ID_QUALITY_GATE},
+      {L"Time Machine: Checkpoint",L"Save a local version",ID_CHECKPOINT},
+      {L"Time Machine: Restore",L"Load earlier version",ID_RESTORE_CHECKPOINT},
+      {L"Run Nova program",L"F5",ID_RUN},
+      {L"Compile current file",L"F6",ID_CHECK},
+      {L"Build Windows EXE",L"F7",ID_BUILD},
+      {L"Open project",L"Choose a folder",ID_PROJECT_OPEN},
+      {L"New file",L"Ctrl+N",ID_NEW},
+      {L"Open file",L"Ctrl+O",ID_OPEN},
+      {L"Save file",L"Ctrl+S",ID_SAVE},
+      {L"Search inside project",L"Ctrl+Shift+F",ID_PROJECT_SEARCH},
+      {L"Jump to function",L"Ctrl+Shift+O",ID_SYMBOLS},
+      {L"Visual App Designer",L"Design desktop UI",ID_DESIGNER},
+      {L"AI: propose project changes",L"Requires permission and review",ID_AI_MULTI},
+      {L"AI: review a fix",L"Compile before apply",ID_AI_PREVIEW},
+      {L"AI: create app draft",L"Create in a new tab",ID_AI_PROJECT},
+      {L"Focus mode",L"Ctrl+Shift+E",ID_VIEW_FOCUS},
+      {L"Toggle Project sidebar",L"Workspace layout",ID_VIEW_PROJECT},
+      {L"Toggle AI sidebar",L"Workspace layout",ID_VIEW_AI},
+      {L"Clean trailing whitespace",L"Editor formatting",ID_FORMAT_SPACE},
+      {L"Trinity: Ukrainian",L"Language view",ID_TRINITY_UK},
+      {L"Trinity: Polish",L"Language view",ID_TRINITY_PL},
+      {L"Trinity: English",L"Language view",ID_TRINITY_EN},
+      {L"Stop running process",L"Shift+F5",ID_STOP}
+    };
+    for(const auto& a:actions)paletteItems.push_back({a.label,a.detail,L"",ItemType::Action,a.command,0});
+    for(const auto& projectFile:projectFiles){
+      const auto rel=projectFile.lexically_relative(projectRoot).generic_wstring();
+      paletteItems.push_back({projectFile.filename().wstring(),L"Project file · "+rel,rel,ItemType::File,0,0});
+    }
+    for(const auto& symbol:nova_next19::symbols(editorText(editor),250))
+      paletteItems.push_back({symbol.name,L"Function · line "+std::to_wstring(symbol.line),L"",ItemType::Symbol,0,symbol.line});
+    if(!paletteWindow){
+      WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=paletteWndProc;
+      wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
+      wc.lpszClassName=L"NovaStudio40CommandCenter";
+      RegisterClassW(&wc);
+      paletteWindow=CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"Nova Command Center",
+        WS_POPUP|WS_BORDER,0,0,620,390,mainWindow,nullptr,wc.hInstance,this);
+    }
+    if(!paletteWindow||!paletteEdit||!paletteList){setStatus(L"Could not create Command Center");return;}
+    RECT rect{};GetWindowRect(mainWindow,&rect);
+    int x=rect.left+std::max(0,((rect.right-rect.left)-620)/2);
+    int y=rect.top+std::min(125,std::max(25,(rect.bottom-rect.top)/6));
+    SetWindowPos(paletteWindow,HWND_TOP,x,y,620,390,SWP_SHOWWINDOW);
+    SetWindowTextW(paletteEdit,L"");refreshPalette();
+    SetFocus(paletteEdit);
+  }
+  void quickActions(){openCommandCenter();}
   void sendTerminalInput(){
     if(!terminalInput)return;
     const std::wstring entered=editorText(terminalInput);
@@ -1480,7 +1783,9 @@ class Studio{
       btnProject=newButton(h,L"Project",ID_PROJECT_OPEN);btnOpen=newButton(h,L"Open",ID_OPEN);
       btnSave=newButton(h,L"Save",ID_SAVE);btnRun=newButton(h,L"▶  Run F5",ID_RUN);
       btnCompile=newButton(h,L"Compile",ID_CHECK);btnBuild=newButton(h,L"Build EXE",ID_BUILD);
-      btnStop=newButton(h,L"Stop",ID_STOP);btnQuick=newButton(h,L"Quick actions",ID_QUICK_ACTIONS);
+      btnStop=newButton(h,L"Stop",ID_STOP);btnQuick=newButton(h,L"⌕  Command Center",ID_QUICK_ACTIONS);
+      btnXray=newButton(h,L"X-Ray",ID_XRAY);btnGate=newButton(h,L"Quality Gate",ID_QUALITY_GATE);
+      btnForge=newButton(h,L"+ Forge",ID_FORGE);
       btnAiAsk=newButton(h,L"Ask AI",ID_AI_ASK);btnAiExplain=newButton(h,L"Explain code",ID_AI_EXPLAIN);
       btnAiFix=newButton(h,L"Fix code",ID_AI_FIX);btnAiCopy=newButton(h,L"Copy answer",ID_AI_COPY);
       btnAiPreview=newButton(h,L"AI Proof: Verify / Apply",ID_AI_PREVIEW);
@@ -1513,9 +1818,12 @@ class Studio{
       HMENU menu=CreateMenu(),files=CreatePopupMenu(),edit=CreatePopupMenu(),nova=CreatePopupMenu(),aiMenu=CreatePopupMenu(),view=CreatePopupMenu();
       AppendMenuW(files,MF_STRING,ID_NEW,L"New\tCtrl+N");AppendMenuW(files,MF_STRING,ID_OPEN,L"Open\tCtrl+O");
       AppendMenuW(files,MF_STRING,ID_PROJECT_OPEN,L"Open project folder...");
+      AppendMenuW(files,MF_STRING,ID_FORGE,L"Nova Forge: New project from blueprint...");
       AppendMenuW(files,MF_STRING,ID_DESIGNER,L"Visual app designer...");
       AppendMenuW(files,MF_STRING,ID_DESIGNER_EDIT,L"Edit saved designer form...");
       AppendMenuW(files,MF_STRING,ID_SAVE,L"Save\tCtrl+S");AppendMenuW(files,MF_STRING,ID_SAVE_AS,L"Save as...");
+      AppendMenuW(files,MF_STRING,ID_CHECKPOINT,L"Time Machine: create checkpoint...");
+      AppendMenuW(files,MF_STRING,ID_RESTORE_CHECKPOINT,L"Time Machine: restore checkpoint...");
       AppendMenuW(files,MF_STRING,ID_TAB_CLOSE,L"Close tab\tCtrl+W");
       AppendMenuW(files,MF_STRING,ID_TAB_NEXT,L"Next tab\tCtrl+Tab");
       AppendMenuW(edit,MF_STRING,ID_FIND,L"Find...\tCtrl+F");
@@ -1529,11 +1837,14 @@ class Studio{
       AppendMenuW(edit,MF_STRING,ID_COMPLETE,L"Complete keyword/function\tCtrl+Space");
       AppendMenuW(edit,MF_STRING,ID_SYMBOLS,L"Go to function\tCtrl+Shift+O");
       AppendMenuW(edit,MF_STRING,ID_PROJECT_SEARCH,L"Search in project\tCtrl+Shift+F");
-      AppendMenuW(edit,MF_STRING,ID_QUICK_ACTIONS,L"Quick actions\tCtrl+Shift+P");
+      AppendMenuW(edit,MF_STRING,ID_QUICK_ACTIONS,L"Command Center\tCtrl+Shift+P");
       AppendMenuW(edit,MF_SEPARATOR,0,nullptr);
       AppendMenuW(edit,MF_STRING,ID_TRINITY_EN,L"Trinity → English (new tab)");
       AppendMenuW(edit,MF_STRING,ID_TRINITY_UK,L"Trinity → Українська (new tab)");
       AppendMenuW(edit,MF_STRING,ID_TRINITY_PL,L"Trinity → Polski (new tab)");
+      AppendMenuW(nova,MF_STRING,ID_XRAY,L"Project X-Ray (offline scan)");
+      AppendMenuW(nova,MF_STRING,ID_QUALITY_GATE,L"Project Quality Gate (compile all)");
+      AppendMenuW(nova,MF_SEPARATOR,0,nullptr);
       AppendMenuW(nova,MF_STRING,ID_RUN,L"Run\tF5");AppendMenuW(nova,MF_STRING,ID_CHECK,L"Compile\tF6");
       AppendMenuW(nova,MF_STRING,ID_BUILD,L"Build EXE\tF7");AppendMenuW(nova,MF_STRING,ID_BUILD_GUI,L"Build windowed EXE");
       AppendMenuW(nova,MF_STRING,ID_STOP,L"Stop\tShift+F5");
@@ -1653,6 +1964,11 @@ class Studio{
         case ID_TRINITY_UK:openTrinityView(nova_trinity16::Language::Ukrainian);break;
         case ID_TRINITY_PL:openTrinityView(nova_trinity16::Language::Polish);break;
         case ID_QUICK_ACTIONS:quickActions();break;
+        case ID_FORGE:openNovaForge();break;
+        case ID_XRAY:projectXray();break;
+        case ID_QUALITY_GATE:projectQualityGate();break;
+        case ID_CHECKPOINT:createCheckpoint();break;
+        case ID_RESTORE_CHECKPOINT:restoreCheckpoint();break;
         case ID_AI_ASK:case ID_AI_EXPLAIN:case ID_AI_FIX:case ID_AI_PROJECT:case ID_AI_MULTI:askAi(LOWORD(w));break;
         case ID_AI_COPY:copyAi();break;
         case ID_AI_PREVIEW:previewAiFix();break;
@@ -1660,7 +1976,7 @@ class Studio{
         case ID_BUILD:start(Action::Build);break;case ID_BUILD_GUI:start(Action::BuildGui);break;
         case ID_STOP:if(busy)stop();break;
         case ID_TERMINAL_SEND:sendTerminalInput();break;
-        case ID_ABOUT:MessageBoxW(h,L"Nova Studio 3.0 Preview (Update 20 UI)\nMinimap, project search, function navigation, project AI proof, designer grid and preview.\nAI project sources are sent only with explicit consent; code edits require review.",L"About",MB_OK);break;
+        case ID_ABOUT:MessageBoxW(h,L"Nova Studio 4.0 Preview\nNova Forge, Command Center, Project X-Ray, Quality Gate, Time Machine, AI Proof and App Designer.\nOffline tools never transmit code; AI requires explicit consent and review.",L"About",MB_OK);break;
       }return 0;
     }
     if(m==WM_NOTIFY && l){
@@ -1775,6 +2091,7 @@ class Studio{
     }
     if(m==WM_CLOSE){if(closeAllDocuments())DestroyWindow(h);return 0;}
     if(m==WM_DESTROY){
+      if(paletteWindow){DestroyWindow(paletteWindow);paletteWindow=nullptr;}
       // Child windows (including RichEdit) still exist at this point.
       // Do NOT unload Msftedit.dll or destroy the shared font here.
       KillTimer(h,HIGHLIGHT_TIMER);KillTimer(h,PROJECT_SEARCH_TIMER);
@@ -1823,7 +2140,7 @@ public:
     WNDCLASSW wc{};wc.hInstance=instance;wc.lpfnWndProc=callback;wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);wc.lpszClassName=L"NovaStudioNextWindow";
     if(!RegisterClassW(&wc))return 2;
-    mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio",WS_OVERLAPPEDWINDOW,
+    mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio 4",WS_OVERLAPPEDWINDOW,
                               CW_USEDEFAULT,CW_USEDEFAULT,1370,850,nullptr,nullptr,instance,this);
     if(!mainWindow)return 2;
     darkTitlebar(mainWindow);
@@ -1847,6 +2164,7 @@ public:
         if(!IsWindow(mainWindow)||!IsWindow(editor)||!IsWindow(output)||!IsWindow(status)||
            !IsWindow(btnSave)||!IsWindow(btnRun)||!IsWindow(btnCompile)||!IsWindow(btnBuild)||!IsWindow(btnStop)||
            !IsWindow(projectList)||!IsWindow(aiLog)||!IsWindow(aiInput)||!IsWindow(btnAiAsk)||
+           !IsWindow(btnForge)||!IsWindow(btnXray)||!IsWindow(btnGate)||
            !IsWindow(tabs)||!IsWindow(problems)||!IsWindow(btnTabClose)||!IsWindow(btnAiPreview)||
            !IsWindow(btnDesigner)||!IsWindow(terminalInput)||!IsWindow(btnTerminalSend)||!IsWindow(btnAiProject)||
            !IsWindow(miniMap)||!IsWindow(gutter)||!IsWindow(projectSearch)||!IsWindow(btnAiMulti))result=21;
@@ -1896,6 +2214,12 @@ public:
           }
         }
         if(!result){
+          novaTrace("SMOKE_COMMAND_CENTER");
+          SendMessageW(mainWindow,WM_COMMAND,MAKEWPARAM(ID_QUICK_ACTIONS,0),0);
+          if(!IsWindow(paletteWindow)||!IsWindow(paletteEdit)||!IsWindow(paletteList))result=33;
+          else ShowWindow(paletteWindow,SW_HIDE);
+      }
+      if(!result){
           novaTrace("SMOKE_BEFORE_RESIZE");
           SendMessageW(mainWindow,WM_SIZE,0,MAKELPARAM(1024,700));
           novaTrace("SMOKE_AFTER_RESIZE");
@@ -1938,6 +2262,8 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int show){
       if(!nova_aiproof18::prepare(L"show 1",0,6,L"show 1",L"show 2"))return 25;
       if(nova_next19::symbols(L"function hello()\nend").empty())return 26;
       if(!nova_next19::parseMultiFile(L"```nova:a.nova\nshow 1\n```"))return 27;
+      if(nova_hyper40::fuzzyScore(L"p ray",L"Project X-Ray")<0)return 28;
+      if(nova_hyper40::inspect({{L"main.nova",L"function hi()\nend\n"}}).functions!=1)return 29;
       return 0;
     }catch(...){return 13;}
   }

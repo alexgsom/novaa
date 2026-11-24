@@ -946,7 +946,6 @@ static int novaMain(const vector<string>& args) {
       else {forward=true;appArgs.push_back(arg);}
     }
     if(lang!="en"&&lang!="uk"&&lang!="pl")throw NovaError("--lang must be en, uk or pl");
-    if(traceSteps&&mode!="exec")throw NovaError("--trace-steps is supported for exec .nbc only");
     if(maxSteps<1||maxSteps>100000000)throw NovaError("--max-steps must be 1..100000000");
     Runtime runtime(lang,maxSteps,appArgs);
     runtime.run(string(reinterpret_cast<const char*>(NOVA_EMBEDDED_CODE),NOVA_EMBEDDED_LENGTH),"main.nova");

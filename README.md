@@ -1,3 +1,5 @@
+**NOVA STUDIO 4.0 HYPER PREVIEW:** new Command Center (`Ctrl+Shift+P`), Nova Forge (three local application blueprints), offline Project X-Ray, compile-only project Quality Gate, and per-file Time Machine checkpoints with safe restore. Includes a fix for standalone compilation after Update 24. **Windows build/UI not yet verified.** Read [Ukrainian release guide](NOVA_STUDIO_4_HYPER_UA.md).
+
 **Nova Studio 3.0 Preview — Update 19:** preserved restrained dark theme (no cyberpunk redesign), with minimap, line numbers, current-line highlight, smarter completion, function navigation (Ctrl+Shift+O), project search (Ctrl+Shift+F), bounded project-aware AI multi-file proposal + compile-only verification, and App Designer snapping/grid/properties/templates/native preview. Read [Ukrainian guide](NOVA_STUDIO_3_UPDATE_19_UA.md). Windows MSVC/GUI verification still required.
 
 **Nova Studio Next Preview 4 — Combined Updates 16/17/18**: Trinity trilingual source views, Living UI form round-trip, and AI Proof compile-first review. Read [the Ukrainian guide](NOVA_STUDIO_NEXT_16_18_UA.md).

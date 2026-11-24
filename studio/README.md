@@ -1,3 +1,5 @@
+**Nova Studio 4.0 Hyper Preview:** Command Center, Forge, X-Ray, Quality Gate and Time Machine are available in the C++ source. See [`../NOVA_STUDIO_4_HYPER_UA.md`](../NOVA_STUDIO_4_HYPER_UA.md) for functionality and Windows validation limits.
+
 # Nova Studio — Update 20 UI
 
 See `../NOVA_STUDIO_UPDATE_20_UI_UA.md` for the responsive minimalist interface, View sidebar toggles and Focus mode (`Ctrl+Shift+E`). Windows GUI execution requires CI/manual verification.

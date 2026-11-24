@@ -28,5 +28,5 @@ jobs:
       - name: CMake native Studio text and AI helpers tests
         run: |
           cmake -S . -B build-linux
-          cmake --build build-linux --target nova-studio-text-tests nova-studio-ai-tests nova-studio-next14-tests nova-studio-designer15-tests nova-studio-trinity16-tests nova-studio-living17-tests nova-studio-aiproof18-tests nova-studio-next19-tests nova-studio-designer19-tests
+          cmake --build build-linux --target nova-studio-text-tests nova-studio-ai-tests nova-studio-next14-tests nova-studio-designer15-tests nova-studio-trinity16-tests nova-studio-living17-tests nova-studio-aiproof18-tests nova-studio-next19-tests nova-studio-designer19-tests nova-studio-hyper40-tests
           ctest --test-dir build-linux --output-on-failure

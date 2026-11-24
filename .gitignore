@@ -9,3 +9,6 @@
 /dist/*.sha256
 **/__pycache__/
 *.py[cod]
+
+# Studio Time Machine local checkpoints
+.nova-history/

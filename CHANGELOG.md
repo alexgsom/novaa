@@ -1,3 +1,14 @@
+## Nova Studio 4.0 Hyper Preview — 2026-11-24
+
+- NEW: fuzzy Command Center with workspace files, current-file symbols and actions.
+- NEW: Nova Forge — Counter, Notes and Tasks blueprints, no AI/no overwrite.
+- NEW: Project X-Ray — offline static findings, clickable source locations.
+- NEW: Quality Gate — cancellable, compile-only project batch verification.
+- NEW: Time Machine — local, manually created per-file checkpoints and safe restore into editor buffer.
+- FIX: remove out-of-scope traceSteps check from standalone embedded-app branch.
+- TESTS: portable C++ suite extended to 10 and added to both Linux/Windows CI workflows.
+- STATUS: Linux tests passing; Windows UI/MSVC validation pending.
+
 ## Nova Studio 3.0 Preview — Update 19
 
 - Kept original restrained dark UI, no cyberpunk redesign.

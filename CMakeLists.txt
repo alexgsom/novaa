@@ -115,3 +115,12 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME nova-studio-designer19-tests COMMAND nova-studio-designer19-tests)
 endif()
+
+# Nova Studio 4: command center, local project intelligence and checkpoints.
+if(BUILD_TESTING)
+  add_executable(nova-studio-hyper40-tests tests/studio_hyper40_native.cpp)
+  if(MSVC)
+    target_compile_options(nova-studio-hyper40-tests PRIVATE /W4 /EHsc /utf-8)
+  endif()
+  add_test(NAME nova-studio-hyper40-tests COMMAND nova-studio-hyper40-tests)
+endif()
