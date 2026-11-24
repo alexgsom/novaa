@@ -168,7 +168,7 @@ class Studio{
     HBRUSH bg=CreateSolidBrush(pane==gutter?PANEL_BG:RGB(19,27,42));
     FillRect(dc,&rect,bg);DeleteObject(bg);
     if(!editor){EndPaint(pane,&ps);return;}
-    const int height=std::max(1,rect.bottom),width=std::max(1,rect.right);
+    const int height=std::max(1,(int)rect.bottom),width=std::max(1,(int)rect.right);
     DWORD caret=0;SendMessageW(editor,EM_GETSEL,(WPARAM)&caret,0);
     LONG active=(LONG)SendMessageW(editor,EM_LINEFROMCHAR,(WPARAM)caret,0);
     if(pane==gutter){

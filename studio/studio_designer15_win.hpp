@@ -174,8 +174,8 @@ class DesignerWindow {
     }catch(...){MessageBoxW(window,L"Cannot preview this form.",L"Nova Designer",MB_ICONERROR);}
   }
   void loadTemplate(nova_designer19::Template kind){
-    if(MessageBoxW(window,L"Replace the current visual layout with a starter template?
-Unsaved designer changes will be lost.",
+    if(MessageBoxW(window,L"Replace the current visual layout with a starter template?\n"
+      L"Unsaved designer changes will be lost.",
       L"Nova designer templates",MB_YESNO|MB_ICONQUESTION)!=IDYES)return;
     form=nova_designer19::starter(kind);selected=-1;
     SetWindowTextW(title,form.title.c_str());info();InvalidateRect(window,nullptr,FALSE);

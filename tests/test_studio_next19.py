@@ -28,6 +28,13 @@ class Next19(unittest.TestCase):
                      'showPreview(', 'loadTemplate(', 'resizing=', 'TEMPLATE_LOGIN',
                      'TEMPLATE_FEEDBACK', 'TEMPLATE_DASHBOARD'):
             self.assertIn(item,self.designer)
+    def test_msvc_gui_source_compilation_regressions(self):
+        # Do not embed a physical newline inside a C++ wide-string literal.
+        self.assertIn('starter template?\\n"',self.designer)
+        self.assertNotIn('starter template?\nUnsaved',self.designer)
+        # Windows RECT uses LONG; std::max needs arguments of the same type.
+        self.assertIn('std::max(1,(int)rect.bottom)',self.studio)
+        self.assertIn('std::max(1,(int)rect.right)',self.studio)
     def test_windows_ci_targets_and_portable_suite(self):
         for flow in (ROOT/'.github/workflows/windows-acceptance.yml',ROOT/'.github/workflows/native-build.yml'):
             text=flow.read_text(encoding='utf-8')
