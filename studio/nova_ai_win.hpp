@@ -23,14 +23,14 @@ inline std::wstring getEnv(const wchar_t* name){
   if(copied==0||copied>=required)return L"";
   result.resize(copied);return result;
 }
-inline std::string chat(const std::wstring& apiKey,const std::string& model,const std::string& prompt){
+inline std::string chat(const std::wstring& apiKey,const std::string& model,const std::string& prompt,unsigned maxOutputTokens=1100){
   if(apiKey.empty()||apiKey.size()>2048)throw std::runtime_error("OPENAI_API_KEY is missing or too long");
   for(wchar_t c:apiKey){
     // No CR/LF or other header injection can enter the Authorization header.
     if(!((c>=L'A'&&c<=L'Z')||(c>=L'a'&&c<=L'z')||(c>=L'0'&&c<=L'9')||c==L'-'||c==L'_'||c==L'.'))
       throw std::runtime_error("OPENAI_API_KEY contains invalid characters");
   }
-  const std::string body=makeRequest(model,prompt);
+  const std::string body=makeRequest(model,prompt,maxOutputTokens);
   WinHttpHandle session(WinHttpOpen(L"NovaStudioNext/1.0",WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                     WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
   if(!session.value)throw std::runtime_error("WinHttpOpen failed");

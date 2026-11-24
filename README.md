@@ -1,3 +1,5 @@
+**Nova Studio 3.0 Preview — Update 19:** preserved restrained dark theme (no cyberpunk redesign), with minimap, line numbers, current-line highlight, smarter completion, function navigation (Ctrl+Shift+O), project search (Ctrl+Shift+F), bounded project-aware AI multi-file proposal + compile-only verification, and App Designer snapping/grid/properties/templates/native preview. Read [Ukrainian guide](NOVA_STUDIO_3_UPDATE_19_UA.md). Windows MSVC/GUI verification still required.
+
 **Nova Studio Next Preview 4 — Combined Updates 16/17/18**: Trinity trilingual source views, Living UI form round-trip, and AI Proof compile-first review. Read [the Ukrainian guide](NOVA_STUDIO_NEXT_16_18_UA.md).
 
 > **Nova Studio Next Preview 3 (Update 15):** візуальний конструктор вікон, інтерактивний Run-термінал, підтримка `ask()` у байткоді та AI-генерація чернетки Nova-застосунку. Інструкція: [NOVA_STUDIO_NEXT_15_UA.md](NOVA_STUDIO_NEXT_15_UA.md).

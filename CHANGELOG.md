@@ -1,3 +1,12 @@
+## Nova Studio 3.0 Preview — Update 19
+
+- Kept original restrained dark UI, no cyberpunk redesign.
+- New Win32 line gutter and clickable code minimap; current-line highlighting.
+- Ctrl+Space now includes local function names; Ctrl+Shift+O jumps to functions; Ctrl+Shift+F searches .nova project files.
+- User-consented, bounded project AI context; strict multi-file response format; expanded diff review; compile-only verification in a temporary folder; second approval + disk snapshot checks and best-effort rollback before writing existing files. No auto-run of AI code.
+- Designer: 10px grid with snapping, resizing by grip, numeric properties, templates, separate Win32 control preview. Existing Living UI source round-trip preserved.
+- New portable C++ tests and Python integration-contract tests; Windows CI test targets/smoke updated. Windows release EXE not verified in current Linux runtime.
+
 ## Nova Studio Next Preview 3 / Update 15
 
 - Win32 form designer (`studio_designer15_win.hpp`) з портативною моделлю компонування (`studio_designer15.hpp`), генерацією однієї .nova-програми в нову вкладку лише після підтвердження.

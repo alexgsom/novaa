@@ -1,3 +1,7 @@
+## Nova Studio 3.0 Preview (Update 19)
+
+Original dark layout retained. Added line-number gutter, code minimap, current-line formatting, function name completions (`Ctrl+Space`), function navigation (`Ctrl+Shift+O`), .nova project search (`Ctrl+Shift+F`), bounded project-aware multi-file AI with explicit source-sharing consent/diff/compile/second approval, and designer grid/snapping/numeric widget properties/starter templates/native preview. Details: `../NOVA_STUDIO_3_UPDATE_19_UA.md`. Requires an updated Windows EXE from MSVC/GitHub Actions; local Linux tests do not verify Win32 GUI.
+
 ## Nova Studio Next Preview 3 (Update 15)
 
 Нове: кнопка **App Designer** (візуальне компонування, генерація .nova у нову вкладку), поле **Send input** для інтерактивного Run / ask, **Create Nova app (AI)** (ручний дозвіл на відкриття чернетки). Деталі й обмеження: `../NOVA_STUDIO_NEXT_15_UA.md`.

@@ -8,6 +8,7 @@ int main(){
   auto request=makeRequest("gpt-4.1-mini","Поясни: show \"ok\"");
   CHECK(request.find("\\\"ok\\\"")!=std::string::npos);
   CHECK(request.find("model")!=std::string::npos);
+  CHECK(makeRequest("gpt-4.1-mini","Project request",8000).find("\"max_output_tokens\":8000")!=std::string::npos);
   CHECK(extractOutput("{\"output\":[{\"content\":[{\"text\":\"Привіт\\nNova\",\"type\":\"output_text\"}]}]}")=="Привіт\nNova");
   CHECK(extractOutput("{\"output\":[{\"content\":[{\"type\":\"output_text\",\"text\":\"\\u0141\\ud83d\\ude80\"}]}]}")=="Ł🚀");
   bool failed=false;
