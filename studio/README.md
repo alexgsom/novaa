@@ -1,3 +1,7 @@
+# Nova Studio — Update 20 UI
+
+See `../NOVA_STUDIO_UPDATE_20_UI_UA.md` for the responsive minimalist interface, View sidebar toggles and Focus mode (`Ctrl+Shift+E`). Windows GUI execution requires CI/manual verification.
+
 ## Nova Studio 3.0 Preview (Update 19)
 
 Original dark layout retained. Added line-number gutter, code minimap, current-line formatting, function name completions (`Ctrl+Space`), function navigation (`Ctrl+Shift+O`), .nova project search (`Ctrl+Shift+F`), bounded project-aware multi-file AI with explicit source-sharing consent/diff/compile/second approval, and designer grid/snapping/numeric widget properties/starter templates/native preview. Details: `../NOVA_STUDIO_3_UPDATE_19_UA.md`. Requires an updated Windows EXE from MSVC/GitHub Actions; local Linux tests do not verify Win32 GUI.

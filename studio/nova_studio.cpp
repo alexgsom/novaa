@@ -38,10 +38,10 @@ static constexpr UINT JOB_DONE=WM_APP+77, AI_DONE=WM_APP+78, JOB_OUTPUT=WM_APP+8
 static constexpr int ID_EDITOR=101,ID_OUTPUT=102,ID_STATUS=103;
 static constexpr int ID_PROJECT_LIST=110, ID_AI_INPUT=111, ID_AI_LOG=112, ID_TABS=113, ID_PROBLEMS=114;
 static constexpr int ID_NEW=201,ID_OPEN=202,ID_SAVE=203,ID_SAVE_AS=204,ID_CHECK=205,ID_RUN=206,ID_BUILD=207,ID_BUILD_GUI=208,ID_STOP=209,ID_ABOUT=210,ID_FIND=211,ID_REPLACE=212,ID_NEXT=213,ID_PREVIOUS=214,ID_TOGGLE_COMMENT=215;
-static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235;
+static constexpr int ID_PROJECT_OPEN=216,ID_AI_ASK=217,ID_AI_EXPLAIN=218,ID_AI_FIX=219,ID_AI_COPY=220,ID_QUICK_ACTIONS=221,ID_TAB_CLOSE=222,ID_TAB_NEXT=223,ID_COMPLETE=224,ID_AI_PREVIEW=225,ID_DESIGNER=226,ID_TERMINAL_SEND=227,ID_AI_PROJECT=228, ID_TRINITY_EN=229,ID_TRINITY_UK=230,ID_TRINITY_PL=231,ID_DESIGNER_EDIT=232,ID_SYMBOLS=233,ID_PROJECT_SEARCH=234,ID_AI_MULTI=235,ID_VIEW_PROJECT=236,ID_VIEW_AI=237,ID_VIEW_FOCUS=238;
 static constexpr size_t MAX_FILE=4*1024*1024;
-static constexpr COLORREF SHELL_BG=RGB(12,17,28),PANEL_BG=RGB(21,28,43),EDIT_BG=RGB(17,24,38);
-static constexpr COLORREF FOREGROUND=RGB(223,231,245),MUTED=RGB(151,166,191),ACCENT=RGB(79,126,241);
+static constexpr COLORREF SHELL_BG=RGB(17,21,28),PANEL_BG=RGB(26,32,41),EDIT_BG=RGB(20,25,33);
+static constexpr COLORREF FOREGROUND=RGB(235,239,245),MUTED=RGB(150,162,178),ACCENT=RGB(104,139,235);
 // Windows CI diagnostics. Enabled only by --gui-smoke.
 // Each record is flushed immediately, so the last line survives a GUI callback crash.
 static bool gNovaGuiSmokeTrace=false;
@@ -118,6 +118,7 @@ class Studio{
   HBRUSH shellBrush=nullptr,panelBrush=nullptr,editBrush=nullptr;
   HACCEL accelerators=nullptr;HMODULE richLibrary=nullptr;
   bool dirty=false,loading=false,busy=false,richEdit=false,aiBusy=false;
+  bool showProjectPanel=true,showAiPanel=true,focusMode=false;
   UINT findMessage=0;HWND findWindow=nullptr;
   FINDREPLACEW searchDialog{};
   wchar_t searchText[256]{}, replaceText[256]{};
@@ -248,8 +249,8 @@ class Studio{
     const bool pressed=(d->itemState&ODS_SELECTED)!=0;
     const bool primary=(d->CtlID==ID_RUN||d->CtlID==ID_AI_ASK);
     const bool danger=(d->CtlID==ID_STOP);
-    COLORREF background=primary?ACCENT:(danger?RGB(91,45,61):RGB(39,51,73));
-    if(pressed)background=primary?RGB(56,94,194):RGB(51,63,85);
+    COLORREF background=primary?ACCENT:(danger?RGB(90,49,58):RGB(43,52,65));
+    if(pressed)background=primary?RGB(70,107,201):RGB(55,65,79);
     HBRUSH brush=CreateSolidBrush(background);
     HPEN pen=CreatePen(PS_SOLID,1,background);
     HGDIOBJ oldBrush=SelectObject(d->hDC,brush),oldPen=SelectObject(d->hDC,pen);
@@ -287,9 +288,9 @@ class Studio{
   void paintShell(HWND h){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);
     RECT all{};GetClientRect(h,&all);FillRect(dc,&all,shellBrush);
-    RECT head{0,0,all.right,62};FillRect(dc,&head,panelBrush);
+    RECT head{0,0,all.right,58};FillRect(dc,&head,panelBrush);
     HBRUSH stripe=CreateSolidBrush(ACCENT);
-    RECT edge{0,60,all.right,62};FillRect(dc,&edge,stripe);DeleteObject(stripe);
+    RECT edge{0,57,all.right,58};FillRect(dc,&edge,stripe);DeleteObject(stripe);
     EndPaint(h,&ps);
   }
   void error(const std::wstring& s){MessageBoxW(mainWindow,s.c_str(),L"Nova Studio",MB_OK|MB_ICONERROR);}
@@ -722,29 +723,44 @@ class Studio{
   }
   void relayout(int w,int h){
     if(!editor)return;
-    const int pad=12,footer=28,bar=62;
-    const int left=std::max(185,std::min(238,w/5));
-    const int right=std::max(255,std::min(335,w/4));
-    const int centerX=left+pad*2;
-    const int rightX=w-right-pad;
-    const int centerWidth=std::max(230,rightX-centerX-pad);
+    // Adaptive three-pane workspace: hide panels when they cannot fit safely.
+    // View menu lets the user explicitly restore the panels after resizing.
+    const int pad=14,footer=28,bar=58;
+    const bool projectVisible=!focusMode&&showProjectPanel&&w>=1020;
+    const bool aiVisible=!focusMode&&showAiPanel&&w>=1280;
+    const int left=projectVisible?std::clamp(w/6,190,244):0;
+    const int right=aiVisible?std::clamp(w/4,264,330):0;
+    const int centerX=projectVisible?left+pad*2:pad;
+    const int rightX=aiVisible?w-right-pad:0;
+    const int centerRight=aiVisible?rightX-pad:w-pad;
+    const int centerWidth=std::max(230,centerRight-centerX);
     const int top=bar+pad;
-    const int bottom=h-footer-pad;
-    const int outputHeight=std::max(188,std::min(260,(bottom-top)/3));
+    const int bottom=std::max(top+260,h-footer-pad);
+    const int outputHeight=std::max(145,std::min(230,(bottom-top)/3));
     const int outputTop=bottom-outputHeight;
     struct Item {HWND h;int size;};
-    const Item toolbar[]={{btnProject,120},{btnOpen,76},{btnSave,76},{btnRun,92},
-                          {btnCompile,96},{btnBuild,103},{btnStop,70},{btnQuick,110},{btnDesigner,112}};
-    int x=14;
-    for(const auto& item:toolbar){if(item.h)MoveWindow(item.h,x,13,item.size,34,TRUE);x+=item.size+9;}
-    MoveWindow(projectTitle,pad,top,left,27,TRUE);
-    MoveWindow(projectSearch,pad,top+30,left,30,TRUE);
-    MoveWindow(projectList,pad,top+64,left,std::max(100,bottom-top-64),TRUE);
-    MoveWindow(searchHitsList,pad,top+64,left,std::max(100,bottom-top-64),TRUE);
+    const Item toolbar[]={{btnProject,100},{btnOpen,68},{btnSave,68},{btnRun,90},
+                          {btnCompile,88},{btnBuild,94},{btnStop,66},{btnQuick,108},{btnDesigner,108}};
+    int x=pad;
+    for(const auto& item:toolbar){
+      if(!item.h)continue;
+      const bool fits=x+item.size<=w-pad;
+      ShowWindow(item.h,fits?SW_SHOW:SW_HIDE);
+      if(fits){MoveWindow(item.h,x,12,item.size,32,TRUE);x+=item.size+8;}
+    }
+    const HWND projectControls[]={projectTitle,projectSearch,projectList,searchHitsList};
+    for(HWND control:projectControls)if(control)ShowWindow(control,projectVisible?SW_SHOW:SW_HIDE);
+    if(projectVisible){
+      MoveWindow(projectTitle,pad,top,left,27,TRUE);
+      MoveWindow(projectSearch,pad,top+30,left,30,TRUE);
+      MoveWindow(projectList,pad,top+64,left,std::max(100,bottom-top-64),TRUE);
+      MoveWindow(searchHitsList,pad,top+64,left,std::max(100,bottom-top-64),TRUE);
+      ShowWindow(showingSearch?projectList:searchHitsList,SW_HIDE);
+    }
     MoveWindow(editorTitle,centerX,top,centerWidth-36,28,TRUE);
     MoveWindow(btnTabClose,centerX+centerWidth-32,top,32,27,TRUE);
     MoveWindow(tabs,centerX,top+30,centerWidth,33,TRUE);
-    const int gutterWidth=46,miniWidth=centerWidth<400?0:76;
+    const int gutterWidth=46,miniWidth=centerWidth<460?0:65;
     const int editY=top+67,editH=std::max(100,outputTop-top-80);
     MoveWindow(gutter,centerX,editY,gutterWidth,editH,TRUE);
     MoveWindow(editor,centerX+gutterWidth,editY,std::max(120,centerWidth-gutterWidth-miniWidth),editH,TRUE);
@@ -765,22 +781,27 @@ class Studio{
                  std::max(35,usable-problemHeight-3),TRUE);
       ShowWindow(problems,SW_SHOW);
     }
-    MoveWindow(aiTitle,rightX,top,right-2,28,TRUE);
-    const int hintHeight=62,btnHeight=32,promptHeight=70;
-    const int controlBottom=bottom;
-    const int promptY=controlBottom-hintHeight-btnHeight*5-promptHeight-44;
-    MoveWindow(aiLog,rightX,top+32,right,std::max(80,promptY-top-41),TRUE);
-    MoveWindow(aiInput,rightX,promptY,right,promptHeight,TRUE);
-    MoveWindow(btnAiAsk,rightX,promptY+promptHeight+6,(right-8)/2,btnHeight,TRUE);
-    MoveWindow(btnAiExplain,rightX+(right+8)/2,promptY+promptHeight+6,(right-8)/2,btnHeight,TRUE);
-    MoveWindow(btnAiFix,rightX,promptY+promptHeight+btnHeight+10,(right-8)/2,btnHeight,TRUE);
-    MoveWindow(btnAiCopy,rightX+(right+8)/2,promptY+promptHeight+btnHeight+10,(right-8)/2,btnHeight,TRUE);
-    MoveWindow(btnAiPreview,rightX,promptY+promptHeight+btnHeight*2+15,right,btnHeight,TRUE);
-    MoveWindow(btnAiProject,rightX,promptY+promptHeight+btnHeight*3+19,right,btnHeight,TRUE);
-    MoveWindow(btnAiMulti,rightX,promptY+promptHeight+btnHeight*4+23,right,btnHeight,TRUE);
-    MoveWindow(aiPrivacy,rightX,promptY+promptHeight+btnHeight*5+27,right,hintHeight,TRUE);
+    const HWND aiControls[]={aiTitle,aiLog,aiInput,btnAiAsk,btnAiExplain,btnAiFix,btnAiCopy,
+                             btnAiPreview,btnAiProject,btnAiMulti,aiPrivacy};
+    for(HWND control:aiControls)if(control)ShowWindow(control,aiVisible?SW_SHOW:SW_HIDE);
+    if(aiVisible){
+      MoveWindow(aiTitle,rightX,top,right-2,28,TRUE);
+      const int hintHeight=62,btnHeight=32,promptHeight=70;
+      const int promptY=bottom-hintHeight-btnHeight*5-promptHeight-44;
+      MoveWindow(aiLog,rightX,top+32,right,std::max(80,promptY-top-41),TRUE);
+      MoveWindow(aiInput,rightX,promptY,right,promptHeight,TRUE);
+      MoveWindow(btnAiAsk,rightX,promptY+promptHeight+6,(right-8)/2,btnHeight,TRUE);
+      MoveWindow(btnAiExplain,rightX+(right+8)/2,promptY+promptHeight+6,(right-8)/2,btnHeight,TRUE);
+      MoveWindow(btnAiFix,rightX,promptY+promptHeight+btnHeight+10,(right-8)/2,btnHeight,TRUE);
+      MoveWindow(btnAiCopy,rightX+(right+8)/2,promptY+promptHeight+btnHeight+10,(right-8)/2,btnHeight,TRUE);
+      MoveWindow(btnAiPreview,rightX,promptY+promptHeight+btnHeight*2+15,right,btnHeight,TRUE);
+      MoveWindow(btnAiProject,rightX,promptY+promptHeight+btnHeight*3+19,right,btnHeight,TRUE);
+      MoveWindow(btnAiMulti,rightX,promptY+promptHeight+btnHeight*4+23,right,btnHeight,TRUE);
+      MoveWindow(aiPrivacy,rightX,promptY+promptHeight+btnHeight*5+27,right,hintHeight,TRUE);
+    }
     MoveWindow(status,pad,std::max(0,h-footer),std::max(150,w-2*pad),footer,TRUE);
   }
+  void refreshLayout(){RECT r{};GetClientRect(mainWindow,&r);relayout(r.right-r.left,r.bottom-r.top);}
   struct AiResult{bool ok=false;std::wstring answer;};
   struct MultiResult{
     bool passed=false,stopped=false;
@@ -1454,7 +1475,7 @@ class Studio{
       novaTrace("OUTPUT_AND_STATUS_CREATED");
       novaTrace("AFTER_DEFAULT_SOURCE");
       findMessage=RegisterWindowMessageW(FINDMSGSTRINGW);
-      HMENU menu=CreateMenu(),files=CreatePopupMenu(),edit=CreatePopupMenu(),nova=CreatePopupMenu(),aiMenu=CreatePopupMenu();
+      HMENU menu=CreateMenu(),files=CreatePopupMenu(),edit=CreatePopupMenu(),nova=CreatePopupMenu(),aiMenu=CreatePopupMenu(),view=CreatePopupMenu();
       AppendMenuW(files,MF_STRING,ID_NEW,L"New\tCtrl+N");AppendMenuW(files,MF_STRING,ID_OPEN,L"Open\tCtrl+O");
       AppendMenuW(files,MF_STRING,ID_PROJECT_OPEN,L"Open project folder...");
       AppendMenuW(files,MF_STRING,ID_DESIGNER,L"Visual app designer...");
@@ -1486,7 +1507,11 @@ class Studio{
       AppendMenuW(aiMenu,MF_STRING,ID_AI_PREVIEW,L"AI Proof: review, compile and apply...");
       AppendMenuW(aiMenu,MF_STRING,ID_AI_PROJECT,L"Generate app draft from prompt...");
       AppendMenuW(aiMenu,MF_STRING,ID_AI_MULTI,L"Propose multi-file project changes...");
+      AppendMenuW(view,MF_STRING|MF_CHECKED,ID_VIEW_PROJECT,L"Project sidebar");
+      AppendMenuW(view,MF_STRING|MF_CHECKED,ID_VIEW_AI,L"AI sidebar");
+      AppendMenuW(view,MF_STRING,ID_VIEW_FOCUS,L"Focus mode\tCtrl+Shift+E");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)files,L"File");AppendMenuW(menu,MF_POPUP,(UINT_PTR)edit,L"Edit");
+      AppendMenuW(menu,MF_POPUP,(UINT_PTR)view,L"View");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)nova,L"Nova");AppendMenuW(menu,MF_POPUP,(UINT_PTR)aiMenu,L"AI");
       AppendMenuW(menu,MF_STRING,ID_ABOUT,L"About");SetMenu(h,menu);DragAcceptFiles(h,TRUE);setTitle();
       novaTrace("CREATE_COMPLETE");return 0;
@@ -1564,6 +1589,12 @@ class Studio{
       }
       if(LOWORD(w)==ID_PROBLEMS&&HIWORD(w)==LBN_DBLCLK){goToProblem();return 0;}
       switch(LOWORD(w)){
+        case ID_VIEW_PROJECT:showProjectPanel=!showProjectPanel;focusMode=false;
+          CheckMenuItem(GetMenu(mainWindow),ID_VIEW_PROJECT,MF_BYCOMMAND|(showProjectPanel?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
+        case ID_VIEW_AI:showAiPanel=!showAiPanel;focusMode=false;
+          CheckMenuItem(GetMenu(mainWindow),ID_VIEW_AI,MF_BYCOMMAND|(showAiPanel?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
+        case ID_VIEW_FOCUS:focusMode=!focusMode;
+          CheckMenuItem(GetMenu(mainWindow),ID_VIEW_FOCUS,MF_BYCOMMAND|(focusMode?MF_CHECKED:MF_UNCHECKED));refreshLayout();break;
         case ID_NEW:newDocument();break;
         case ID_OPEN:openFile();break;case ID_SAVE:saveFile(false);break;case ID_SAVE_AS:saveFile(true);break;
         case ID_FIND:openSearch(false);break;case ID_REPLACE:openSearch(true);break;
@@ -1588,7 +1619,7 @@ class Studio{
         case ID_BUILD:start(Action::Build);break;case ID_BUILD_GUI:start(Action::BuildGui);break;
         case ID_STOP:if(busy)stop();break;
         case ID_TERMINAL_SEND:sendTerminalInput();break;
-        case ID_ABOUT:MessageBoxW(h,L"Nova Studio 3.0 Preview (Update 19)\nMinimap, project search, function navigation, project AI proof, designer grid and preview.\nAI project sources are sent only with explicit consent; code edits require review.",L"About",MB_OK);break;
+        case ID_ABOUT:MessageBoxW(h,L"Nova Studio 3.0 Preview (Update 20 UI)\nMinimap, project search, function navigation, project AI proof, designer grid and preview.\nAI project sources are sent only with explicit consent; code edits require review.",L"About",MB_OK);break;
       }return 0;
     }
     if(m==WM_NOTIFY && l){
@@ -1751,13 +1782,13 @@ public:
     WNDCLASSW wc{};wc.hInstance=instance;wc.lpfnWndProc=callback;wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);wc.lpszClassName=L"NovaStudioNextWindow";
     if(!RegisterClassW(&wc))return 2;
-    mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio Next",WS_OVERLAPPEDWINDOW,
+    mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio",WS_OVERLAPPEDWINDOW,
                               CW_USEDEFAULT,CW_USEDEFAULT,1370,850,nullptr,nullptr,instance,this);
     if(!mainWindow)return 2;
     darkTitlebar(mainWindow);
     ACCEL bindings[]={{FVIRTKEY|FCONTROL,'N',ID_NEW},{FVIRTKEY|FCONTROL,'O',ID_OPEN},{FVIRTKEY|FCONTROL,'S',ID_SAVE},
                        {FVIRTKEY|FCONTROL,'W',ID_TAB_CLOSE},{FVIRTKEY|FCONTROL,VK_TAB,ID_TAB_NEXT},
-                       {FVIRTKEY|FCONTROL,VK_SPACE,ID_COMPLETE},{FVIRTKEY|FCONTROL,'F',ID_FIND},{FVIRTKEY|FCONTROL,'H',ID_REPLACE},{FVIRTKEY|FCONTROL,'K',ID_TOGGLE_COMMENT},{FVIRTKEY|FCONTROL|FSHIFT,'P',ID_QUICK_ACTIONS},{FVIRTKEY|FCONTROL|FSHIFT,'O',ID_SYMBOLS},{FVIRTKEY|FCONTROL|FSHIFT,'F',ID_PROJECT_SEARCH},{FVIRTKEY|FCONTROL,VK_RETURN,ID_TERMINAL_SEND},
+                       {FVIRTKEY|FCONTROL,VK_SPACE,ID_COMPLETE},{FVIRTKEY|FCONTROL,'F',ID_FIND},{FVIRTKEY|FCONTROL,'H',ID_REPLACE},{FVIRTKEY|FCONTROL,'K',ID_TOGGLE_COMMENT},{FVIRTKEY|FCONTROL|FSHIFT,'P',ID_QUICK_ACTIONS},{FVIRTKEY|FCONTROL|FSHIFT,'O',ID_SYMBOLS},{FVIRTKEY|FCONTROL|FSHIFT,'F',ID_PROJECT_SEARCH},{FVIRTKEY|FCONTROL|FSHIFT,'E',ID_VIEW_FOCUS},{FVIRTKEY|FCONTROL,VK_RETURN,ID_TERMINAL_SEND},
                        {FVIRTKEY,VK_F3,ID_NEXT},{FVIRTKEY|FSHIFT,VK_F3,ID_PREVIOUS},
                        {FVIRTKEY,VK_F5,ID_RUN},{FVIRTKEY,VK_F6,ID_CHECK},{FVIRTKEY,VK_F7,ID_BUILD},{FVIRTKEY|FSHIFT,VK_F5,ID_STOP}};
     accelerators=CreateAcceleratorTableW(bindings,(int)(sizeof(bindings)/sizeof(bindings[0])));
