@@ -1,0 +1,42 @@
+# A real persistent command-line app: native storage + JSON + arguments.
+# Works on Windows or Linux as a packaged standalone Nova program.
+import system
+import storage
+import json
+import lists
+
+let folder = system.join(system.appdata(), "NovaTasks")
+storage.mkdir(folder)
+let datafile = system.join(folder, "tasks.json")
+let tasks = []
+if storage.exists(datafile)
+    tasks = json.parse(storage.read(datafile))
+end
+let arguments = system.args()
+if len(arguments) == 0
+    show "Nova Tasks: add <text> | list | clear"
+else
+    if arguments[0] == "add"
+        if len(arguments) < 2
+            show "Please provide a task name"
+        else
+            lists.append(tasks, {"title":arguments[1],"done":false})
+            storage.write(datafile, json.stringify(tasks))
+            show "Added: " + arguments[1]
+        end
+    else
+        if arguments[0] == "list"
+            show "Nova Tasks"
+            for task in tasks
+                show "- " + task.title
+            end
+        else
+            if arguments[0] == "clear"
+                storage.write(datafile, "[]")
+                show "Cleared"
+            else
+                show "Nova Tasks: add <text> | list | clear"
+            end
+        end
+    end
+end

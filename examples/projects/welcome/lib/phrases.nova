@@ -1,0 +1,7 @@
+import formatter
+function hello(name)
+    return formatter.greet(name)
+end
+функція goodbye(name)
+    поверни "До зустрічі, " + name + "!"
+кінець

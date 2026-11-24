@@ -1,0 +1,64 @@
+# Tasks Nova — native Win32 GUI + JSON database saved as file in AppData.
+import ui
+import text
+import json
+import lists
+import storage
+import system
+
+let folder = system.join(system.appdata(), "NovaNative")
+storage.mkdir(folder)
+let data_path = system.join(folder, "tasks.json")
+let state = {"tasks":[]}
+if storage.exists(data_path)
+    try
+        state.tasks = json.parse(storage.read(data_path))
+    catch error
+        show "Cannot load old task data: " + error.message
+    end
+end
+let app = ui.window("Nova Tasks — без Python", 690, 510)
+let heading = ui.label(app, "Завдання — зберігаються після закриття програми")
+let entry = ui.input(app, "")
+let category = ui.select(app, ["Робота", "Навчання", "Особисте"])
+let output = ui.textarea(app, "")
+let status = ui.label(app, "Готово")
+ui.place(heading, 20, 16, 640, 30)
+ui.place(entry, 20, 53, 420, 34)
+ui.place(category, 453, 53, 205, 34)
+ui.place(output, 20, 100, 638, 235)
+ui.place(status, 20, 410, 635, 30)
+
+function refresh()
+    let summary = ""
+    for task in state.tasks
+        summary = summary + "• " + task + "\n"
+    end
+    output.set(summary)
+    status.set("Завдань: " + str(len(state.tasks)))
+end
+
+function add_task()
+    let value = text.trim(entry.get())
+    if value != ""
+        lists.append(state.tasks, "[" + category.get() + "] " + value)
+        storage.write(data_path, json.pretty(state.tasks))
+        entry.set("")
+        refresh()
+    end
+end
+
+function remove_last()
+    if len(state.tasks) > 0
+        lists.pop(state.tasks)
+        storage.write(data_path, json.pretty(state.tasks))
+        refresh()
+    end
+end
+
+let add = ui.button(app, "Додати", add_task)
+let remove = ui.button(app, "Видалити останнє", remove_last)
+ui.place(add, 20, 350, 195, 44)
+ui.place(remove, 228, 350, 210, 44)
+refresh()
+ui.run(app)

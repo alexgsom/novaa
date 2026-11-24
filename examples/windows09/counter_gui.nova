@@ -1,0 +1,19 @@
+# Mutable object shared by button event handlers
+import ui
+let app = ui.window("Nova Counter", 430, 280)
+let state = {"count": 0}
+let count_text = ui.label(app, "0")
+function plus()
+    state.count = state.count + 1
+    count_text.set(str(state.count))
+end
+function reset()
+    state.count = 0
+    count_text.set("0")
+end
+let plus_button = ui.button(app, "+1", plus)
+let reset_button = ui.button(app, "Reset", "reset")
+ui.place(count_text, 24, 28, 340, 45)
+ui.place(plus_button, 24, 95, 155, 40)
+ui.place(reset_button, 205, 95, 155, 40)
+ui.run(app)

@@ -1,0 +1,23 @@
+niech total = 0
+для n в range(1, 8)
+    if n == 3
+        продовж
+    end
+    jeśli n == 7
+        przerwij
+    koniec
+    total = total + n
+кінець
+pokaż total
+вибір total
+    коли 18
+        покажи "Сума дорівнює 18"
+    else
+        show "Unexpected total"
+кінець
+try
+    assert total == 18
+    raise "Something went wrong"
+catch err
+    show "Error caught: " + err.message
+end

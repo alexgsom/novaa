@@ -1,0 +1,19 @@
+# Windows desktop example: native Win32 UI, no Python/Tkinter.
+import ui
+
+нехай app = ui.window("Привіт із незалежної Nova", 540, 310)
+let title = ui.label(app, "Nova Native — перша Windows-програма!")
+let name = ui.input(app, "")
+
+функція greet()
+    title.set("Привіт, " + name.get() + "!")
+кінець
+
+function close_app()
+    ui.close(app)
+end
+
+ui.button(app, "Привітатися", greet)
+ui.button(app, "Закрити", close_app)
+
+ui.run(app)

@@ -1,0 +1,16 @@
+# Nova Native 0.9 — self-hosted compiler + Win32 callbacks
+import ui
+
+let app = ui.window("Привіт / Cześć / Hello", 540, 300)
+let heading = ui.label(app, "Як тебе звати?")
+let person = ui.input(app, "Оля")
+
+function greet()
+    heading.set("Привіт, " + person.get() + "! 🎉")
+end
+
+let action = ui.button(app, "Привітатися", greet)
+ui.place(heading, 24, 25, 460, 32)
+ui.place(person, 24, 75, 460, 35)
+ui.place(action, 24, 130, 200, 38)
+ui.run(app)

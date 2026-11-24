@@ -1,0 +1,22 @@
+# Note: files are written relative to the process working directory.
+import ui
+import storage
+let app = ui.window("Nova Notes 0.9", 640, 520)
+let notes = ui.textarea(app, "Привіт із Nova!")
+function save()
+    storage.write("nova_notes.txt", notes.get())
+    ui.alert("Nova", "Нотатку збережено")
+end
+function load_notes()
+    if storage.exists("nova_notes.txt")
+        notes.set(storage.read("nova_notes.txt"))
+    end
+end
+let save_button = ui.button(app, "Зберегти", save)
+let open_button = ui.button(app, "Завантажити", load_notes)
+ui.menu(app, "File", "Save", save)
+ui.menu(app, "File", "Open", load_notes)
+ui.place(notes, 20, 20, 580, 355)
+ui.place(save_button, 20, 405, 200, 40)
+ui.place(open_button, 245, 405, 200, 40)
+ui.run(app)

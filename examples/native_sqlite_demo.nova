@@ -1,0 +1,10 @@
+# Native SQLite example: data persists in tasks.db, Python is not involved.
+import sqlite
+import storage
+let db = sqlite.open("tasks.db")
+sqlite.execute(db, "CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+sqlite.execute(db, "INSERT INTO tasks(name) VALUES(?)", ["Написати Nova 💙"])
+for row in sqlite.query(db, "SELECT id, name FROM tasks ORDER BY id")
+    show str(row.id) + ": " + row.name
+end
+sqlite.close(db)

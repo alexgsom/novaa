@@ -1,0 +1,13 @@
+функція double(x)
+    поверни x * 2
+кінець
+let values = [1, 2, 3]
+let result = []
+для item в values
+    result = result + [double(item)]
+кінець
+pokaż result
+niech user = {"name": "Олена", "active": істина}
+pokaż user.name
+user.active = false
+show user.active

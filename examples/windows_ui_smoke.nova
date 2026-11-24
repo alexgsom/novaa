@@ -1,0 +1,30 @@
+# Noninteractive smoke test for a Windows GitHub Actions runner.
+# Creates native Win32 controls, tests get/set and closes before event loop.
+import ui
+import storage
+let app = ui.window("Nova Native Windows smoke", 520, 410)
+let title = ui.label(app, "Україна Polska")
+let editor = ui.textarea(app, "Привіт\nŻółw")
+assert editor.get() == "Привіт\nŻółw"
+editor.set("Nova")
+assert editor.get() == "Nova"
+let enabled = ui.checkbox(app, "Увімкнено", true)
+assert enabled.get() == true
+enabled.set(false)
+assert enabled.get() == false
+let options = ui.select(app, ["Українська", "Polski", "English"])
+assert options.get() == "Українська"
+options.set("Polski")
+assert options.get() == "Polski"
+function close_now()
+    ui.close(app)
+end
+let button = ui.button(app, "Закрити", close_now)
+ui.menu(app, "Файл", "Вихід", close_now)
+ui.place(editor, 20, 40, 450, 130)
+ui.place(options, 20, 195, 250, 32)
+ui.place(button, 20, 300, 180, 40)
+ui.close(app)
+ui.run(app)
+storage.write("nova_win32_smoke_ok.txt", "ok")
+show "Win32 UI smoke OK"

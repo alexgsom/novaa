@@ -1,0 +1,13 @@
+# Example for first Nova-authored compiler: variables, logic, loops, Unicode.
+niech імʼя = "Оля"
+let number = 2 + 3 * 4
+pokaż "Привіт, " + імʼя
+show number
+якщо number == 14
+    pokaż "✓ wynik poprawny"
+інакше
+    покажи "wrong"
+кінець
+повтори 3
+    show "Nova!"
+кінець

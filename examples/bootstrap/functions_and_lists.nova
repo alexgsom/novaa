@@ -1,0 +1,35 @@
+# Nova Native 0.6: user functions, recursion, lists, for, short-circuit.
+# All commands here are compiled by compiler/novac.nova into .nbc.
+
+функція factorial(n)
+    якщо n <= 1
+        поверни 1
+    кінець
+    поверни n * factorial(n - 1)
+кінець
+
+funkcja greet(person)
+    zwróć "Вітаємо, " + person + "!"
+koniec
+
+niech names = ["Оля", "Żółw", "Nova"]
+for name in names
+    покажи greet(name)
+end
+
+show "5! = " + str(factorial(5))
+show "Символів: " + str(len("Україна"))
+show "Без помилки: " + str(0 and (1 / 0))
+
+let sum = 0
+dla i w range(1, 8)
+    якщо i == 2
+        continue
+    кінець
+    if i > 5
+        break
+    end
+    sum = sum + i
+koniec
+show "Сума: " + str(sum)
+show names[1]

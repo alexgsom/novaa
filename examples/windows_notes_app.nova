@@ -1,0 +1,26 @@
+# Native Win32 single-line notes app, saves UTF-8 data next to the working directory.
+import ui
+import storage
+
+let window = ui.window("Нотатки Nova без Python", 580, 340)
+let title = ui.label(window, "Введіть нотатку:")
+let note = ui.input(window, "")
+let status = ui.label(window, "Готово")
+
+функція save_note()
+    storage.write("nova_notes.txt", note.get())
+    status.set("Збережено в nova_notes.txt")
+кінець
+
+function load_note()
+    if storage.exists("nova_notes.txt")
+        note.set(storage.read("nova_notes.txt"))
+        status.set("Файл відкрито")
+    else
+        status.set("Файлу поки немає")
+    end
+end
+
+ui.button(window, "Зберегти", save_note)
+ui.button(window, "Завантажити", load_note)
+ui.run(window)

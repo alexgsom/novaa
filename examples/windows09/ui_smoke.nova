@@ -1,0 +1,20 @@
+# Minimal Win32 noninteractive smoke test: no window loop or clicks.
+import ui
+let app = ui.window("Nova 0.9 Win32 Smoke", 360, 280)
+let caption = ui.label(app, "before")
+let field = ui.input(app, "Łódź")
+let flag = ui.checkbox(app, "Test", true)
+let menu = ui.select(app, ["one", "two"])
+caption.set("after")
+field.set("Київ")
+assert caption.get() == "after"
+assert ui.get(field) == "Київ"
+assert ui.get(flag) == true
+assert ui.get(menu) == "one"
+function clicked()
+    caption.set("clicked")
+end
+ui.button(app, "Click", clicked)
+ui.menu(app, "File", "Click", "clicked")
+show "WIN32_UI_OK"
+ui.close(app)

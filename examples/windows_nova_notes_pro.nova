@@ -1,0 +1,77 @@
+# Nova Notes Pro — Win32 native desktop editor, without Python.
+# Choose File > Open or File > Save As; can also use the buttons.
+import ui
+import storage
+import system
+
+let win = ui.window("Nova Notes Pro — незалежна Nova", 780, 590)
+let state = {"path":""}
+let heading = ui.label(win, "Нотатки Nova — UTF-8 / українська / polski")
+let editor = ui.textarea(win, "Привіт із Nova Native 0.3!\nТепер я маю багаторядкове поле.")
+let status = ui.label(win, "Новий документ")
+let autosave = ui.checkbox(win, "Резервна копія у папці користувача", true)
+
+ui.place(heading, 18, 14, 730, 32)
+ui.place(editor, 18, 52, 740, 365)
+ui.place(autosave, 18, 420, 480, 30)
+ui.place(status, 18, 526, 735, 26)
+
+function open_note()
+    let path = ui.open_file(win, "Відкрити нотатку")
+    if path != null
+        try
+            editor.set(storage.read(path))
+            state.path = path
+            status.set("Відкрито: " + path)
+        catch error
+            ui.alert("Помилка читання", error.message)
+        end
+    end
+end
+
+function save_as()
+    let path = ui.save_file(win, "Зберегти нотатку")
+    if path != null
+        state.path = path
+        save_note()
+    end
+end
+
+function save_note()
+    if state.path == ""
+        save_as()
+    else
+        try
+            storage.write(state.path, editor.get())
+            status.set("Збережено: " + state.path)
+            if autosave.get()
+                let folder = system.join(system.appdata(), "NovaNative")
+                storage.mkdir(folder)
+                storage.write(system.join(folder, "backup.txt"), editor.get())
+            end
+        catch error
+            ui.alert("Помилка збереження", error.message)
+        end
+    end
+end
+
+function new_note()
+    editor.set("")
+    state.path = ""
+    status.set("Новий документ")
+end
+
+function about_note()
+    ui.alert("Про програму", "Nova Notes Pro 0.3 — Win32 + C++17 без Python")
+end
+
+ui.menu(win, "Файл", "Новий", new_note)
+ui.menu(win, "Файл", "Відкрити...", open_note)
+ui.menu(win, "Файл", "Зберегти", save_note)
+ui.menu(win, "Файл", "Зберегти як...", save_as)
+ui.menu(win, "Довідка", "Про Nova", about_note)
+let open_button = ui.button(win, "Відкрити", open_note)
+let save_button = ui.button(win, "Зберегти", save_note)
+ui.place(open_button, 18, 462, 170, 44)
+ui.place(save_button, 202, 462, 170, 44)
+ui.run(win)

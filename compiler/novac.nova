@@ -1,0 +1,905 @@
+# Nova Stage-1 experimental compiler, written IN NOVA (not in C++ or Python).
+# Source subset -> portable, JSON-encoded Nova bytecode v1 (.nbc).
+# The C++ nova-native executable is the stage-0 runner and bytecode VM.
+import storage
+import text
+import lists
+import json
+import system
+
+function keyword(word)
+    if word == "нехай" or word == "niech"
+        return "let"
+    end
+    if word == "покажи" or word == "pokaż"
+        return "show"
+    end
+    if word == "якщо" or word == "jeśli"
+        return "if"
+    end
+    if word == "інакше" or word == "inaczej"
+        return "else"
+    end
+    if word == "кінець" or word == "koniec"
+        return "end"
+    end
+    if word == "повтори" or word == "powtórz"
+        return "repeat"
+    end
+    if word == "для" or word == "dla"
+        return "for"
+    end
+    if word == "функція" or word == "funkcja"
+        return "function"
+    end
+    if word == "поверни" or word == "zwróć"
+        return "return"
+    end
+    if word == "перерви" or word == "przerwij"
+        return "break"
+    end
+    if word == "продовж" or word == "kontynuuj"
+        return "continue"
+    end
+    if word == "перевір" or word == "sprawdź"
+        return "assert"
+    end
+    if word == "викинь" or word == "rzuć"
+        return "raise"
+    end
+    return word
+end
+
+function scan_expr(source)
+    let out = []
+    let word = ""
+    let quoted = false
+    let escaped = false
+    let literal = ""
+    for ch in source
+        if quoted
+            literal = literal + ch
+            if escaped
+                escaped = false
+            else
+                if ch == "\\"
+                    escaped = true
+                else
+                    if ch == "\""
+                        lists.append(out, literal)
+                        literal = ""
+                        quoted = false
+                    end
+                end
+            end
+        else
+            if ch == "\""
+                if word != ""
+                    lists.append(out, word)
+                    word = ""
+                end
+                quoted = true
+                literal = "\""
+            else
+                if text.contains(" \t\r", ch)
+                    if word != ""
+                        lists.append(out, word)
+                        word = ""
+                    end
+                else
+                    if text.contains("+-*/%()<>=!,[]{}:", ch)
+                        if word != ""
+                            lists.append(out, word)
+                            word = ""
+                        end
+                        lists.append(out, ch)
+                    else
+                        word = word + ch
+                    end
+                end
+            end
+        end
+    end
+    if quoted
+        raise "Unterminated string in expression"
+    end
+    if word != ""
+        lists.append(out, word)
+    end
+    let merged = []
+    let skip = false
+    for i in range(0, len(out))
+        if skip
+            skip = false
+        else
+            let t = out[i]
+            if i + 1 < len(out)
+                let pair = t + out[i + 1]
+                if pair == "==" or pair == "!=" or pair == "<=" or pair == ">="
+                    lists.append(merged, pair)
+                    skip = true
+                else
+                    lists.append(merged, t)
+                end
+            else
+                lists.append(merged, t)
+            end
+        end
+    end
+    return merged
+end
+
+function is_number(word)
+    let digits = 0
+    let dots = 0
+    if word == "" or word[0] == "." or word[len(word) - 1] == "."
+        return false
+    end
+    for ch in word
+        if text.contains("0123456789", ch)
+            digits = digits + 1
+        else
+            if ch == "."
+                dots = dots + 1
+            else
+                return false
+            end
+        end
+    end
+    return digits > 0 and dots <= 1
+end
+
+function is_identifier(word)
+    if word == ""
+        return false
+    end
+    if text.contains("0123456789", word[0])
+        return false
+    end
+    for ch in word
+        if text.contains("+-*/%()<>=! \t\r\n\"'.,:;[]{}#@&|^?~`$", ch)
+            return false
+        end
+    end
+    return true
+end
+
+
+function is_callable_name(name)
+    let parts = text.split(name, ".")
+    if len(parts) < 1 or len(parts) > 2
+        return false
+    end
+    for part in parts
+        if not is_identifier(part)
+            return false
+        end
+    end
+    return true
+end
+
+function priority(operator)
+    if operator == "or" or operator == "або" or operator == "lub"
+        return 1
+    end
+    if operator == "and" or operator == "і" or operator == "oraz"
+        return 2
+    end
+    if operator == "==" or operator == "!=" or operator == "<" or operator == ">" or operator == "<=" or operator == ">="
+        return 3
+    end
+    if operator == "+" or operator == "-"
+        return 4
+    end
+    if operator == "*" or operator == "/" or operator == "%"
+        return 5
+    end
+    if operator == "neg" or operator == "not" or operator == "не" or operator == "nie"
+        return 6
+    end
+    return 0
+end
+
+function emit_operator(result, op)
+    if op == "+"
+        lists.append(result, ["add"])
+    else
+        if op == "-"
+            lists.append(result, ["sub"])
+        else
+            if op == "*"
+                lists.append(result, ["mul"])
+            else
+                if op == "/"
+                    lists.append(result, ["div"])
+                else
+                    if op == "%"
+                        lists.append(result, ["mod"])
+                    else
+                        if op == "neg"
+                            lists.append(result, ["neg"])
+                        else
+                            if op == "not" or op == "не" or op == "nie"
+                                lists.append(result, ["not"])
+                            else
+                                if op == "=="
+                                    lists.append(result, ["eq"])
+                                else
+                                    if op == "!="
+                                        lists.append(result, ["ne"])
+                                    else
+                                        if op == "<"
+                                            lists.append(result, ["lt"])
+                                        else
+                                            if op == ">"
+                                                lists.append(result, ["gt"])
+                                            else
+                                                if op == "<="
+                                                    lists.append(result, ["le"])
+                                                else
+                                                    if op == ">="
+                                                        lists.append(result, ["ge"])
+                                                    else
+                                                        if op == "and" or op == "і" or op == "oraz"
+                                                            lists.append(result, ["and"])
+                                                        else
+                                                            if op == "or" or op == "або" or op == "lub"
+                                                                lists.append(result, ["or"])
+                                                            else
+                                                                if op == "str"
+                                                                    lists.append(result, ["to_str"])
+                                                                else
+                                                                    if op == "int"
+                                                                        lists.append(result, ["to_int"])
+                                                                    else
+                                                                        raise "Unsupported operator: " + op
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return true
+end
+
+# Shunting-yard expression compiler with nested user-function calls.
+# Calls are emitted in postorder as ["call", function_name, argument_count].
+# Expression fragments contain relative jump targets.  Relocation happens when
+# fragments are joined, keeping short-circuit and/or correct inside nested calls.
+function append_fragment(target, fragment)
+    let offset = len(target)
+    for instruction in fragment
+        let op = instruction[0]
+        if op == "jump" or op == "jump_false" or op == "jump_true"
+            lists.append(target, [op, instruction[1] + offset])
+        else
+            lists.append(target, instruction)
+        end
+    end
+    return true
+end
+
+function lower_expression(postfix)
+    let fragments = []
+    for instruction in postfix
+        let op = instruction[0]
+        if op == "push" or op == "load"
+            lists.append(fragments, [instruction])
+        else
+            if op == "neg" or op == "not" or op == "to_int" or op == "to_str" or op == "get_attr"
+                if len(fragments) < 1
+                    raise "Unary operator without value"
+                end
+                let frag = lists.pop(fragments)
+                lists.append(frag, instruction)
+                lists.append(fragments, frag)
+            else
+                if op == "call" or op == "make_list" or op == "make_object"
+                    let count = 0
+                    if op == "call"
+                        count = int(instruction[2])
+                    else
+                        count = int(instruction[1])
+                        if op == "make_object"
+                            count = count * 2
+                        end
+                    end
+                    if count > len(fragments)
+                        raise "Function call missing arguments"
+                    end
+                    let args = []
+                    repeat count
+                        lists.append(args, lists.pop(fragments))
+                    end
+                    let frag = []
+                    for i in range(0, count)
+                        append_fragment(frag, args[count - i - 1])
+                    end
+                    lists.append(frag, instruction)
+                    lists.append(fragments, frag)
+                else
+                    if len(fragments) < 2
+                        raise "Binary operator without two values"
+                    end
+                    let right = lists.pop(fragments)
+                    let left = lists.pop(fragments)
+                    let frag = []
+                    append_fragment(frag, left)
+                    if op == "and" or op == "or"
+                        lists.append(frag, ["dup"])
+                        let at = len(frag)
+                        if op == "and"
+                            lists.append(frag, ["jump_false", 0])
+                        else
+                            lists.append(frag, ["jump_true", 0])
+                        end
+                        lists.append(frag, ["pop"])
+                        append_fragment(frag, right)
+                        frag[at][1] = len(frag)
+                    else
+                        append_fragment(frag, right)
+                        lists.append(frag, instruction)
+                    end
+                    lists.append(fragments, frag)
+                end
+            end
+        end
+    end
+    if len(fragments) != 1
+        raise "Invalid expression stack"
+    end
+    return fragments[0]
+end
+
+# Shunting yard expression compiler. Lists, objects, dotted module calls,
+# property reads, nested calls, and lazy boolean operators share one parser.
+function expr_code(source)
+    let tokens = scan_expr(source)
+    let out = []
+    let ops = []
+    let expect_value = true
+    for i in range(0, len(tokens))
+        let token = tokens[i]
+        let handled = false
+        if token == "("
+            lists.append(ops, "(")
+            expect_value = true
+            handled = true
+        end
+        if token == "["
+            if expect_value
+                lists.append(ops, "list|0")
+            else
+                lists.append(ops, "index")
+            end
+            lists.append(ops, "[")
+            expect_value = true
+            handled = true
+        end
+        if token == "{"
+            if not expect_value
+                raise "Missing operator before object literal"
+            end
+            lists.append(ops, "obj|0")
+            lists.append(ops, "{")
+            expect_value = true
+            handled = true
+        end
+        if token == ":"
+            if expect_value or len(ops) < 2 or ops[len(ops) - 1] != "{" or not text.starts_with(ops[len(ops) - 2], "obj|")
+                raise "Invalid object key/value separator"
+            end
+            expect_value = true
+            handled = true
+        end
+        if token == ","
+            if expect_value
+                raise "Missing argument or collection element"
+            end
+            repeat len(ops)
+                let top = ops[len(ops) - 1]
+                if top == "(" or top == "[" or top == "{"
+                    break
+                end
+                emit_operator(out, lists.pop(ops))
+            end
+            if len(ops) < 2
+                raise "Comma only allowed in calls, lists and objects"
+            end
+            let marker = ops[len(ops) - 2]
+            if text.starts_with(marker, "fn|")
+                let parts = text.split(marker, "|")
+                ops[len(ops) - 2] = "fn|" + parts[1] + "|" + str(int(parts[2]) + 1)
+            else
+                if text.starts_with(marker, "list|")
+                    ops[len(ops) - 2] = "list|" + str(int(text.slice(marker, 5)) + 1)
+                else
+                    if text.starts_with(marker, "obj|")
+                        ops[len(ops) - 2] = "obj|" + str(int(text.slice(marker, 4)) + 1)
+                    else
+                        raise "Unexpected comma"
+                    end
+                end
+            end
+            expect_value = true
+            handled = true
+        end
+        if token == "]" or token == "}" or token == ")"
+            if expect_value and (i == 0 or (tokens[i - 1] != "[" and tokens[i - 1] != "{" and tokens[i - 1] != "("))
+                raise "Missing collection element or argument"
+            end
+            let opening = "("
+            if token == "]"
+                opening = "["
+            end
+            if token == "}"
+                opening = "{"
+            end
+            let matched = false
+            repeat len(ops)
+                let top = lists.pop(ops)
+                if top == opening
+                    matched = true
+                    break
+                end
+                emit_operator(out, top)
+            end
+            if not matched
+                raise "Unmatched closing delimiter: " + token
+            end
+            if token == ")"
+                if len(ops) > 0 and text.starts_with(ops[len(ops) - 1], "fn|")
+                    let parts = text.split(lists.pop(ops), "|")
+                    let argc = int(parts[2])
+                    if not expect_value
+                        argc = argc + 1
+                    end
+                    lists.append(out, ["call", parts[1], argc])
+                else
+                    if expect_value
+                        raise "Empty grouping parentheses"
+                    end
+                end
+            end
+            if token == "]"
+                if len(ops) == 0
+                    raise "Invalid closing bracket"
+                end
+                let marker = lists.pop(ops)
+                if text.starts_with(marker, "list|")
+                    let count = int(text.slice(marker, 5))
+                    if not expect_value
+                        count = count + 1
+                    end
+                    lists.append(out, ["make_list", count])
+                else
+                    if marker == "index" and not expect_value
+                        lists.append(out, ["index"])
+                    else
+                        raise "Invalid index expression"
+                    end
+                end
+            end
+            if token == "}"
+                if len(ops) == 0
+                    raise "Invalid closing object brace"
+                end
+                let marker = lists.pop(ops)
+                if not text.starts_with(marker, "obj|")
+                    raise "Invalid object literal"
+                end
+                let count = int(text.slice(marker, 4))
+                if not expect_value
+                    count = count + 1
+                end
+                lists.append(out, ["make_object", count])
+            end
+            expect_value = false
+            handled = true
+        end
+        if not handled and text.starts_with(token, ".") and not expect_value
+            let fields = text.split(text.slice(token, 1), ".")
+            for field in fields
+                if not is_identifier(field)
+                    raise "Invalid dotted property: " + token
+                end
+                lists.append(out, ["get_attr", field])
+            end
+            handled = true
+        end
+        if not handled
+            let p = priority(token)
+            if p > 0 or token == "-"
+                if token == "-" and expect_value
+                    lists.append(ops, "neg")
+                else
+                    if token == "not" or token == "не" or token == "nie"
+                        if not expect_value
+                            raise "Unexpected not operator"
+                        end
+                        lists.append(ops, token)
+                    else
+                        if expect_value
+                            raise "Missing left operand for " + token
+                        end
+                        repeat len(ops)
+                            let top = ops[len(ops) - 1]
+                            if priority(top) < p
+                                break
+                            end
+                            emit_operator(out, lists.pop(ops))
+                        end
+                        lists.append(ops, token)
+                        expect_value = true
+                    end
+                end
+            else
+                if not expect_value
+                    raise "Missing operator before " + token
+                end
+                if is_callable_name(token) and i + 1 < len(tokens) and tokens[i + 1] == "("
+                    lists.append(ops, "fn|" + token + "|0")
+                else
+                    if text.starts_with(token, "\"")
+                        lists.append(out, ["push", json.parse(token)])
+                    else
+                        if is_number(token)
+                            lists.append(out, ["push", float(token)])
+                        else
+                            if token == "true" or token == "істина" or token == "prawda"
+                                lists.append(out, ["push", true])
+                            else
+                                if token == "false" or token == "хиба" or token == "fałsz"
+                                    lists.append(out, ["push", false])
+                                else
+                                    if token == "null" or token == "нічого" or token == "nic"
+                                        lists.append(out, ["push", null])
+                                    else
+                                        let parts = text.split(token, ".")
+                                        for part in parts
+                                            if not is_identifier(part)
+                                                raise "Invalid expression token: " + token
+                                            end
+                                        end
+                                        lists.append(out, ["load", parts[0]])
+                                        for j in range(1, len(parts))
+                                            lists.append(out, ["get_attr", parts[j]])
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    expect_value = false
+                end
+            end
+        end
+    end
+    if expect_value
+        raise "Incomplete expression: " + source
+    end
+    repeat len(ops)
+        let top = lists.pop(ops)
+        if top == "(" or top == "[" or top == "{" or top == "index" or text.starts_with(top, "fn|") or text.starts_with(top, "list|") or text.starts_with(top, "obj|")
+            raise "Unclosed delimiter"
+        end
+        emit_operator(out, top)
+    end
+    return lower_expression(out)
+end
+
+function append_expr(code, source)
+    append_fragment(code, expr_code(source))
+    return true
+end
+
+
+function append_assignment(code, target, source)
+    let lhs = text.trim(target)
+    if is_identifier(lhs)
+        append_expr(code, source)
+        lists.append(code, ["store", lhs])
+        return true
+    end
+    let last_open = -1
+    let offset = 0
+    for ch in lhs
+        if ch == "["
+            last_open = offset
+        end
+        offset = offset + 1
+    end
+    if last_open >= 0 and text.ends_with(lhs, "]")
+        let base = text.slice(lhs, 0, last_open)
+        let key = text.slice(lhs, last_open + 1, len(lhs) - last_open - 2)
+        append_expr(code, base)
+        append_expr(code, key)
+        append_expr(code, source)
+        lists.append(code, ["set_index"])
+        return true
+    end
+    let parts = text.split(lhs, ".")
+    if len(parts) == 2 and is_identifier(parts[0]) and is_identifier(parts[1])
+        append_expr(code, parts[0])
+        append_expr(code, source)
+        lists.append(code, ["set_attr", parts[1]])
+        return true
+    end
+    raise "Invalid assignment target: " + lhs
+end
+
+# Function definitions are registered in the VM's preflight pass, then skipped
+# during top-level execution. Source-stage function declarations must be top-level.
+function compile_source(source)
+    let code = []
+    let frames = []
+    let lines = text.split(source, "\n")
+    let line_number = 0
+    for raw in lines
+        line_number = line_number + 1
+        let line = text.trim(raw)
+        if line != "" and not text.starts_with(line, "#")
+            let sep = text.index_of(line, " ")
+            let head = line
+            let tail = ""
+            if sep >= 0
+                head = text.slice(line, 0, sep)
+                tail = text.trim(text.slice(line, sep + 1))
+            end
+            let command = keyword(head)
+            let handled = false
+            if command == "import"
+                handled = true
+                if tail != "storage" and tail != "system" and tail != "json" and tail != "text" and tail != "lists" and tail != "sqlite" and tail != "http" and tail != "ui"
+                    raise "Unsupported bytecode import: " + tail
+                end
+                lists.append(code, ["import", tail])
+            end
+            if command == "function"
+                handled = true
+                if len(frames) != 0
+                    raise "Function must be declared at top level (line " + str(line_number) + ")"
+                end
+                let at_open = text.index_of(tail, "(")
+                if at_open <= 0 or not text.ends_with(tail, ")")
+                    raise "Invalid function header on line " + str(line_number)
+                end
+                let name = text.trim(text.slice(tail, 0, at_open))
+                if not is_identifier(name)
+                    raise "Invalid function name: " + name
+                end
+                let raw_params = text.trim(text.slice(tail, at_open + 1, len(tail) - at_open - 2))
+                let params = []
+                if raw_params != ""
+                    let items = text.split(raw_params, ",")
+                    for item in items
+                        let param = text.trim(item)
+                        if not is_identifier(param)
+                            raise "Invalid parameter: " + param
+                        end
+                        for existing in params
+                            if existing == param
+                                raise "Duplicate parameter: " + param
+                            end
+                        end
+                        lists.append(params, param)
+                    end
+                end
+                let at = len(code)
+                lists.append(code, ["function", name, params, 0])
+                lists.append(frames, {"kind":"function", "at":at})
+            end
+            if command == "let"
+                handled = true
+                let eq = text.index_of(tail, "=")
+                if eq < 0
+                    raise "Line " + str(line_number) + ": expected let name = expression"
+                end
+                let name = text.trim(text.slice(tail, 0, eq))
+                if not is_identifier(name)
+                    raise "Invalid variable: " + name
+                end
+                append_expr(code, text.trim(text.slice(tail, eq + 1)))
+                lists.append(code, ["store", name])
+            end
+            if command == "show"
+                handled = true
+                append_expr(code, tail)
+                lists.append(code, ["print"])
+            end
+            if command == "if"
+                handled = true
+                append_expr(code, tail)
+                let at = len(code)
+                lists.append(code, ["jump_false", 0])
+                lists.append(frames, {"kind":"if", "false":at, "end":-1})
+            end
+            if command == "else"
+                handled = true
+                if len(frames) == 0
+                    raise "Unexpected else"
+                end
+                let frame = frames[len(frames) - 1]
+                if frame.kind != "if"
+                    raise "Else must follow an if block"
+                end
+                let at = len(code)
+                lists.append(code, ["jump", 0])
+                code[frame.false][1] = len(code)
+                frame.kind = "else"
+                frame.end = at
+            end
+            if command == "repeat"
+                handled = true
+                let name = "@loop" + str(line_number)
+                append_expr(code, tail)
+                lists.append(code, ["repeat_count"])
+                lists.append(code, ["store", name])
+                let begin = len(code)
+                lists.append(code, ["load", name])
+                lists.append(code, ["push", 0])
+                lists.append(code, ["gt"])
+                let endjump = len(code)
+                lists.append(code, ["jump_false", 0])
+                lists.append(frames, {"kind":"repeat", "name":name, "begin":begin, "false":endjump, "breaks":[], "continues":[]})
+            end
+            if command == "for"
+                handled = true
+                let sep_in = " in "
+                let at_in = text.index_of(tail, sep_in)
+                if at_in < 0
+                    sep_in = " в "
+                    at_in = text.index_of(tail, sep_in)
+                end
+                if at_in < 0
+                    sep_in = " w "
+                    at_in = text.index_of(tail, sep_in)
+                end
+                if at_in < 0
+                    raise "Expected for <name> in <expression> on line " + str(line_number)
+                end
+                let item = text.trim(text.slice(tail, 0, at_in))
+                if not is_identifier(item)
+                    raise "Invalid for variable: " + item
+                end
+                let expr = text.trim(text.slice(tail, at_in + len(sep_in)))
+                let name = "@iter" + str(line_number)
+                append_expr(code, expr)
+                lists.append(code, ["iter_start", name])
+                let begin = len(code)
+                lists.append(code, ["iter_next", name, item, 0])
+                lists.append(frames, {"kind":"for", "name":name, "begin":begin, "false":begin, "breaks":[], "continues":[]})
+            end
+            if command == "return"
+                handled = true
+                let inside = false
+                for frame in frames
+                    if frame.kind == "function"
+                        inside = true
+                    end
+                end
+                if not inside
+                    raise "Return outside function (line " + str(line_number) + ")"
+                end
+                if tail == ""
+                    lists.append(code, ["push", null])
+                else
+                    append_expr(code, tail)
+                end
+                lists.append(code, ["ret"])
+            end
+            if command == "break" or command == "continue"
+                handled = true
+                let loop = null
+                for j in range(0, len(frames))
+                    let frame = frames[len(frames) - j - 1]
+                    if frame.kind == "repeat" or frame.kind == "for"
+                        loop = frame
+                        break
+                    end
+                end
+                if loop == null
+                    raise "Loop control outside repeat (line " + str(line_number) + ")"
+                end
+                let at = len(code)
+                lists.append(code, ["jump", 0])
+                if command == "break"
+                    lists.append(loop.breaks, at)
+                else
+                    lists.append(loop.continues, at)
+                end
+            end
+            if command == "assert" or command == "raise"
+                handled = true
+                append_expr(code, tail)
+                lists.append(code, [command])
+            end
+            if command == "end"
+                handled = true
+                if len(frames) == 0
+                    raise "Unexpected end"
+                end
+                let frame = lists.pop(frames)
+                if frame.kind == "if"
+                    code[frame.false][1] = len(code)
+                end
+                if frame.kind == "else"
+                    code[frame.end][1] = len(code)
+                end
+                if frame.kind == "function"
+                    lists.append(code, ["push", null])
+                    lists.append(code, ["ret"])
+                    code[frame.at][3] = len(code)
+                end
+                if frame.kind == "for"
+                    for index in frame.continues
+                        code[index][1] = frame.begin
+                    end
+                    lists.append(code, ["jump", frame.begin])
+                    code[frame.false][3] = len(code)
+                    for index in frame.breaks
+                        code[index][1] = len(code)
+                    end
+                    lists.append(code, ["iter_end", frame.name])
+                end
+                if frame.kind == "repeat"
+                    let update_at = len(code)
+                    for index in frame.continues
+                        code[index][1] = update_at
+                    end
+                    lists.append(code, ["load", frame.name])
+                    lists.append(code, ["push", 1])
+                    lists.append(code, ["sub"])
+                    lists.append(code, ["store", frame.name])
+                    lists.append(code, ["jump", frame.begin])
+                    code[frame.false][1] = len(code)
+                    for index in frame.breaks
+                        code[index][1] = len(code)
+                    end
+                end
+            end
+            if not handled
+                let opening = text.index_of(line, "(")
+                if opening > 0 and is_callable_name(text.trim(text.slice(line, 0, opening))) and text.ends_with(line, ")")
+                    append_expr(code, line)
+                    lists.append(code, ["pop"])
+                    handled = true
+                end
+            end
+            if not handled
+                let eq = text.index_of(line, "=")
+                if eq > 0 and not text.starts_with(line, "==")
+                    let name = text.trim(text.slice(line, 0, eq))
+                    append_assignment(code, name, text.trim(text.slice(line, eq + 1)))
+                else
+                    raise "Unsupported statement on line " + str(line_number) + ": " + line
+                end
+            end
+        end
+    end
+    if len(frames) != 0
+        raise "Missing end at end of source"
+    end
+    lists.append(code, ["halt"])
+    return {"format":"nova-bytecode", "version":1, "instructions":code}
+end
+
+let args = system.args()
+if len(args) != 2
+    raise "Usage: nova-native run compiler/novac.nova -- source.nova output.nbc"
+end
+let source = storage.read(args[0])
+let product = compile_source(source)
+storage.write(args[1], json.stringify(product))
+show "Nova stage-1 compiler: wrote " + args[1]

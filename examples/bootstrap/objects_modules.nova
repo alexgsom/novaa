@@ -1,0 +1,13 @@
+# 0.7: compiler objects, lists, nested attributes and native modules.
+import text
+import json
+import lists
+niech places = [{"name": "Київ", "visits": [1, 2]}, {"name": "Łódź", "visits": [4]}]
+places[0]["visits"][1] = 8
+let state = {"ready": false}
+state.ready = true
+let names = []
+dla city w places
+    lists.append(names, city.name)
+koniec
+pokaż json.stringify({"cities": names, "visited": places[0]["visits"][1], "ready": state.ready})

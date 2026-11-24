@@ -1,0 +1,5 @@
+# Three languages, one native executable.
+niech імʼя = "Nova"
+покажи "Привіт, " + імʼя
+pokaż "Cześć z natywnej Nova!"
+show "Hello from independent Nova!"

@@ -1,0 +1,27 @@
+name: Nova Linux Regression
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build native Linux Nova (Python-free runtime)
+        run: sh build.sh
+      - name: Native runtime regression tests
+        run: python -m unittest discover -s tests -v
+      - name: Verify Nova compiler self-hosting
+        run: sh bootstrap_selfhost.sh
+      - name: CMake native editor-text test
+        run: |
+          cmake -S . -B build-linux
+          cmake --build build-linux --target nova-studio-text-tests
+          ctest --test-dir build-linux --output-on-failure

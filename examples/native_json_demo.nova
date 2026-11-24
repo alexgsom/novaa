@@ -1,0 +1,11 @@
+# Portable example: runs on Windows / Linux / macOS, without Python.
+import json
+import lists
+import text
+
+let info = json.parse("{\"city\":\"Київ\",\"people\":[\"Оля\",\"Jan\"]}")
+lists.append(info.people, "Żaneta")
+show info.city
+show text.join(", ", info.people)
+show json.stringify(info)
+show text.contains(json.pretty(info), "Київ")

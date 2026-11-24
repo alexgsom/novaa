@@ -1,0 +1,5 @@
+# A multi-file Nova project: English, Ukrainian and Polish in one application.
+import "lib/phrases.nova" as phrases
+niech user = "Оля"
+pokaż phrases.hello(user)
+покажи phrases.goodbye("Jan")

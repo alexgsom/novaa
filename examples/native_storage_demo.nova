@@ -1,0 +1,11 @@
+# Works on Linux, Windows and macOS: 100% native C++ file operations.
+import storage
+import system
+
+show "Система: " + system.platform()
+let folder = "nova_example_data"
+show storage.mkdir(folder)
+let file = system.join(folder, "привіт.txt")
+show storage.write(file, "Вітаю! Cześć! Hello!")
+show storage.read(file)
+show storage.list(folder)

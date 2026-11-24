@@ -1,0 +1,10 @@
+# Native HTTP on Windows (WinHTTP) and Linux (libcurl).
+# Uses a public demonstration URL; requires internet access.
+import http
+import json
+let response = http.get("https://httpbin.org/json")
+show response.status
+if response.status == 200
+    let document = json.parse(response.body)
+    show document
+end

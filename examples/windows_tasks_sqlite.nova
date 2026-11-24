@@ -1,0 +1,48 @@
+# Windows desktop Tasks: native Win32 controls and native SQLite.
+# Place the official sqlite3.dll beside the EXE to enable SQLite on Windows.
+import ui
+import sqlite
+import storage
+import system
+let data_dir = system.join(system.appdata(), "NovaNativeTasks")
+storage.mkdir(data_dir)
+let db = sqlite.open(system.join(data_dir, "tasks.db"))
+sqlite.execute(db, "CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL)")
+let app = ui.window("Nova Tasks — SQLite", 630, 480)
+let title = ui.label(app, "Мій список справ")
+let entry = ui.input(app, "")
+let info = ui.label(app, "")
+let result = ui.textarea(app, "")
+ui.place(title, 20, 15, 560, 35)
+ui.place(entry, 20, 60, 560, 32)
+ui.place(info, 20, 142, 560, 30)
+ui.place(result, 20, 185, 560, 230)
+function refresh()
+    let lines = ""
+    for row in sqlite.query(db, "SELECT id,title FROM tasks ORDER BY id DESC")
+        lines = lines + str(row.id) + ". " + row.title + "\n"
+    end
+    result.set(lines)
+    info.set("Записи оновлено")
+end
+function add_task()
+    let item = entry.get()
+    if len(item) > 0
+        sqlite.execute(db, "INSERT INTO tasks(title) VALUES(?)", [item])
+        entry.set("")
+        refresh()
+    else
+        info.set("Введіть назву завдання")
+    end
+end
+function delete_last()
+    sqlite.execute(db, "DELETE FROM tasks WHERE id=(SELECT max(id) FROM tasks)")
+    refresh()
+end
+let add_button = ui.button(app, "Додати", add_task)
+let remove_button = ui.button(app, "Видалити останнє", delete_last)
+ui.place(add_button, 20, 100, 130, 35)
+ui.place(remove_button, 165, 100, 165, 35)
+refresh()
+ui.run(app)
+sqlite.close(db)
