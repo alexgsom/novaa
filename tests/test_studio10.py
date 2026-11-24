@@ -75,9 +75,9 @@ class Studio10Tests(unittest.TestCase):
             bc=Path(folder)/'Привіт-на-Windows.nbc'
             src.write_text('нехай name = "Żółw"\npokaż name\n',encoding='utf8')
             cp=subprocess.run([str(RUNNER),'exec',str(COMPILER),'--max-steps','15000000','--',str(src),str(bc)],
-                              capture_output=True,text=True,timeout=35)
+                              capture_output=True,text=True,encoding='utf-8',timeout=35)
             self.assertEqual(cp.returncode,0,cp.stderr)
-            output=subprocess.run([str(RUNNER),'exec',str(bc)],capture_output=True,text=True,timeout=25)
+            output=subprocess.run([str(RUNNER),'exec',str(bc)],capture_output=True,text=True,encoding='utf-8',timeout=25)
             self.assertEqual(output.returncode,0,output.stderr)
             self.assertEqual(output.stdout.strip(),'Żółw')
 

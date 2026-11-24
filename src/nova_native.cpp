@@ -768,7 +768,9 @@ class Runtime {
     if(!validName(alias))fail("syntax",line,"invalid import alias");
     if(filename.empty()||filename.size()>512||filename.find('\\')!=string::npos||filename.find(':')!=string::npos)fail("runtime",line,"invalid module path");
     auto relative=std::filesystem::u8path(filename);
-    if(relative.is_absolute())fail("runtime",line,"module paths must be relative");
+    // Windows also has root-relative paths such as /tmp/file.nova, for which is_absolute() is false.
+    if(relative.is_absolute() || relative.has_root_name() || relative.has_root_directory())
+      fail("runtime",line,"module paths must be relative");
     for(const auto& part:relative)if(part==".."||part==".")fail("runtime",line,"module path cannot contain . or ..");
     auto base=std::filesystem::u8path(currentScript).parent_path();
     auto path=(base/relative).lexically_normal();

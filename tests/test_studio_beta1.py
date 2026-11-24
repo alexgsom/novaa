@@ -80,8 +80,10 @@ class StudioBeta1Tests(unittest.TestCase):
         header=TEXT.read_text(encoding='utf8')
         self.assertNotIn('#include <windows.h>',header)
         self.assertNotIn('Python.h',header)
-        self.assertIn('case L\'Ł\'',header)
-        self.assertIn('case L\'Ż\'',header)
+        # A Unicode character literal and its universal-character-name escape are equivalent C++.
+        # Accept both source spellings; native C++ tests verify actual case-folding behavior.
+        self.assertTrue("case L'Ł'" in header or "case L'\\u0141'" in header)
+        self.assertTrue("case L'Ż'" in header or "case L'\\u017B'" in header)
 
 if __name__=='__main__':
     unittest.main()
