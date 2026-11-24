@@ -65,7 +65,7 @@ class NovaWin32Ui {
   int add(const wchar_t* cls,DWORD style,DWORD exStyle,const std::string& caption,Type type,int height) {
     if(!mainWindow||!IsWindow(mainWindow))throw std::runtime_error("Create a window before adding controls");
     int id=nextId++;RECT area{};GetClientRect(mainWindow,&area);
-    int width=std::max(120,area.right-40);
+    int width=std::max<int>(120, area.right-40);
     auto captionW=novaToWide(caption);
     HWND h=CreateWindowExW(exStyle,cls,captionW.c_str(),WS_CHILD|WS_VISIBLE|style,
                             20,nextY,width,height,mainWindow,(HMENU)(INT_PTR)id,GetModuleHandleW(nullptr),nullptr);
