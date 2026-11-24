@@ -1,0 +1,13 @@
+# Real Windows callback acceptance test. A PowerShell Win32 harness clicks the
+# button in a SEPARATE process, then checks this UTF-8 marker and exit code.
+import ui
+import storage
+let app = ui.window("Nova Win32 Click CI", 450, 250)
+let caption = ui.label(app, "Натисни мене / Kliknij")
+function clicked()
+    caption.set("clicked")
+    storage.write("nova_ci_click.txt", "CLICKED_OK_Київ_Łódź")
+    ui.close(app)
+end
+ui.button(app, "CI_CLICK_ME", clicked)
+ui.run(app)
