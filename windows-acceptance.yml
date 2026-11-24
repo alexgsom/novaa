@@ -39,15 +39,28 @@ jobs:
           ctest --test-dir build-acceptance -C Release --output-on-failure
       - name: Nova Studio headless text engine and real Win32 controls
         run: |
+          $traceFile = Join-Path $env:RUNNER_TEMP 'nova-studio-gui-smoke.log'
+          $env:NOVA_STUDIO_TRACE_FILE = $traceFile
           foreach ($mode in @('--self-test', '--gui-smoke')) {
             $p = Start-Process -FilePath (Resolve-Path bin/NovaStudio.exe) -ArgumentList $mode -PassThru
             try {
               if (-not $p.WaitForExit(15000)) { throw "Studio $mode timeout" }
-              if ($p.ExitCode -ne 0) { throw "Studio $mode failed: $($p.ExitCode)" }
+              if ($p.ExitCode -ne 0) {
+                Write-Host "Nova Studio $mode failed: $($p.ExitCode)"
+                if (Test-Path -LiteralPath $traceFile) {
+                  Write-Host '--- Nova Studio GUI trace (last 100 lines) ---'
+                  Get-Content -LiteralPath $traceFile -Tail 100 | ForEach-Object { Write-Host $_ }
+                } else { Write-Host 'No GUI trace was created.' }
+                throw "Studio $mode failed: $($p.ExitCode)"
+              }
             } finally {
               if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
               $p.Dispose()
             }
+          }
+          if (Test-Path -LiteralPath $traceFile) {
+            Write-Host '--- Nova Studio GUI trace (last 30 lines) ---'
+            Get-Content -LiteralPath $traceFile -Tail 30 | ForEach-Object { Write-Host $_ }
           }
       - name: Native self-hosting A to B and Windows compiler EXE
         run: ./tests/smoke_selfhost07.ps1
@@ -89,6 +102,7 @@ jobs:
         with:
           name: nova-windows-diagnostics
           path: |
+            ${{ runner.temp }}/nova-studio-gui-smoke.log
             build-acceptance/Testing/Temporary/LastTest.log
             build-acceptance/CMakeFiles/CMakeConfigureLog.yaml
             build-acceptance/CMakeCache.txt

@@ -9,6 +9,7 @@
 #include <richedit.h>
 #include "studio_text.hpp"
 #include <algorithm>
+#include <cstdio>
 #include <atomic>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +24,33 @@ static constexpr UINT JOB_DONE=WM_APP+77, HIGHLIGHT_TIMER=91;
 static constexpr int ID_EDITOR=101,ID_OUTPUT=102,ID_STATUS=103;
 static constexpr int ID_NEW=201,ID_OPEN=202,ID_SAVE=203,ID_SAVE_AS=204,ID_CHECK=205,ID_RUN=206,ID_BUILD=207,ID_BUILD_GUI=208,ID_STOP=209,ID_ABOUT=210,ID_FIND=211,ID_REPLACE=212,ID_NEXT=213,ID_PREVIOUS=214;
 static constexpr size_t MAX_FILE=4*1024*1024;
+// Windows CI diagnostics. Enabled only by --gui-smoke.
+// Each record is flushed immediately, so the last line survives a GUI callback crash.
+static bool gNovaGuiSmokeTrace=false;
+static wchar_t gNovaGuiSmokeTracePath[32768]{};
+static void novaTrace(const char* label, UINT message=0, LONG_PTR value=0){
+  if(!gNovaGuiSmokeTrace || !gNovaGuiSmokeTracePath[0])return;
+  HANDLE file=CreateFileW(gNovaGuiSmokeTracePath,FILE_APPEND_DATA,
+                          FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,
+                          FILE_ATTRIBUTE_NORMAL,nullptr);
+  if(file==INVALID_HANDLE_VALUE)return;
+  char line[512]{};
+  const int length=std::snprintf(line,sizeof(line),"%lu %s msg=0x%04X extra=0x%llX\r\n",
+      (unsigned long)GetCurrentThreadId(),label,(unsigned int)message,
+      (unsigned long long)(ULONG_PTR)value);
+  if(length>0){DWORD written=0;WriteFile(file,line,(DWORD)std::min<int>(length,sizeof(line)-1),&written,nullptr);}
+  FlushFileBuffers(file);CloseHandle(file);
+}
+static LONG CALLBACK novaFirstChanceFailure(EXCEPTION_POINTERS* details){
+  if(!details || !details->ExceptionRecord)return EXCEPTION_CONTINUE_SEARCH;
+  const DWORD code=details->ExceptionRecord->ExceptionCode;
+  // Record only fatal-looking exceptions; do not intercept or hide them.
+  if(code==0xC0000005u || code==0xC000041Du || code==0xC0000409u || code==0xC000001Du){
+    novaTrace("FIRST_CHANCE_EXCEPTION",code,(LONG_PTR)details->ExceptionRecord->ExceptionAddress);
+  }
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+
 static std::wstring toWide(const std::string& s){
   if(s.empty())return L"";
   int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s.data(),(int)s.size(),nullptr,0);
@@ -65,7 +93,12 @@ class Studio{
   static LRESULT CALLBACK callback(HWND h,UINT m,WPARAM w,LPARAM l){
     Studio* s=reinterpret_cast<Studio*>(GetWindowLongPtrW(h,GWLP_USERDATA));
     if(m==WM_NCCREATE){s=(Studio*)((CREATESTRUCTW*)l)->lpCreateParams;SetWindowLongPtrW(h,GWLP_USERDATA,(LONG_PTR)s);}
-    return s?s->onMessage(h,m,w,l):DefWindowProcW(h,m,w,l);
+    const bool relevant=(m==WM_NCCREATE||m==WM_CREATE||m==WM_SIZE||m==WM_COMMAND||
+                          m==WM_NOTIFY||m==WM_DESTROY||m==WM_NCDESTROY||m==WM_PAINT);
+    if(relevant)novaTrace("WND_ENTER",m,(LONG_PTR)h);
+    LRESULT result=s?s->onMessage(h,m,w,l):DefWindowProcW(h,m,w,l);
+    if(relevant)novaTrace("WND_LEAVE",m,(LONG_PTR)h);
+    return result;
   }
   void error(const std::wstring& s){MessageBoxW(mainWindow,s.c_str(),L"Nova Studio",MB_OK|MB_ICONERROR);}
   void setTitle(){auto name=file.empty()?L"Untitled.nova":file.filename().wstring();
@@ -331,6 +364,8 @@ class Studio{
   LRESULT onMessage(HWND h,UINT m,WPARAM w,LPARAM l){
     if(findMessage && m==findMessage){onSearchMessage((FINDREPLACEW*)l);return 0;}
     if(m==WM_CREATE){
+      mainWindow=h; // Valid even while CreateWindowW is dispatching WM_CREATE.
+      novaTrace("CREATE_BEGIN");
       richLibrary=LoadLibraryW(L"Msftedit.dll");richEdit=richLibrary!=nullptr;
       editor=CreateWindowExW(WS_EX_CLIENTEDGE,richEdit?L"RICHEDIT50W":L"EDIT",L"",
                   WS_VISIBLE|WS_CHILD|WS_VSCROLL|WS_HSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN|ES_NOHIDESEL,
@@ -338,17 +373,22 @@ class Studio{
       if(!editor && richEdit){FreeLibrary(richLibrary);richLibrary=nullptr;richEdit=false;
         editor=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_VISIBLE|WS_CHILD|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN,
                             0,0,100,100,h,(HMENU)ID_EDITOR,GetModuleHandleW(nullptr),nullptr);}
+      novaTrace(editor?"EDITOR_CREATED":"EDITOR_CREATE_FAILED");
       if(!editor)return -1;
       output=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_VISIBLE|WS_CHILD|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_READONLY,
                              0,0,100,100,h,(HMENU)ID_OUTPUT,GetModuleHandleW(nullptr),nullptr);
       status=CreateWindowW(L"STATIC",L"Ready",WS_VISIBLE|WS_CHILD,0,0,100,20,h,(HMENU)ID_STATUS,GetModuleHandleW(nullptr),nullptr);
+      novaTrace("OUTPUT_AND_STATUS_CREATED");
       font=CreateFontW(-17,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,FIXED_PITCH,L"Consolas");
+      novaTrace("BEFORE_SET_FONTS");
       SendMessageW(editor,WM_SETFONT,(WPARAM)font,TRUE);SendMessageW(output,WM_SETFONT,(WPARAM)font,TRUE);
+      novaTrace("AFTER_SET_FONTS");
       if(richEdit){SendMessageW(editor,EM_EXLIMITTEXT,0,(LPARAM)MAX_FILE);
         SendMessageW(editor,EM_SETEVENTMASK,0,ENM_CHANGE|ENM_SELCHANGE);
         SendMessageW(editor,EM_SETBKGNDCOLOR,0,RGB(253,253,253));}
       else SendMessageW(editor,EM_LIMITTEXT,(WPARAM)MAX_FILE,0);
       loading=true;SetWindowTextW(editor,L"# Nova Studio 1.0 Beta 1\r\nshow \"Привіт, Nova!\"\r\n");loading=false;dirty=false;
+      novaTrace("AFTER_DEFAULT_SOURCE");
       findMessage=RegisterWindowMessageW(FINDMSGSTRINGW);
       HMENU menu=CreateMenu(),files=CreatePopupMenu(),edit=CreatePopupMenu(),nova=CreatePopupMenu();
       AppendMenuW(files,MF_STRING,ID_NEW,L"New\tCtrl+N");AppendMenuW(files,MF_STRING,ID_OPEN,L"Open\tCtrl+O");
@@ -362,7 +402,8 @@ class Studio{
       AppendMenuW(nova,MF_STRING,ID_STOP,L"Stop\tShift+F5");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)files,L"File");AppendMenuW(menu,MF_POPUP,(UINT_PTR)edit,L"Edit");
       AppendMenuW(menu,MF_POPUP,(UINT_PTR)nova,L"Nova");
-      AppendMenuW(menu,MF_STRING,ID_ABOUT,L"About");SetMenu(h,menu);DragAcceptFiles(h,TRUE);setTitle();return 0;
+      AppendMenuW(menu,MF_STRING,ID_ABOUT,L"About");SetMenu(h,menu);DragAcceptFiles(h,TRUE);setTitle();
+      novaTrace("CREATE_COMPLETE");return 0;
     }
     if(m==WM_SIZE){relayout(LOWORD(l),HIWORD(l));return 0;}
     if(m==WM_COMMAND){
@@ -380,7 +421,7 @@ class Studio{
         case ID_ABOUT:MessageBoxW(h,L"Nova Studio 1.0 Beta 1\nNative Win32 editor, search/replace, syntax colors, self-hosted Nova compiler and EXE packaging.\nNo Python runtime required.",L"About",MB_OK);break;
       }return 0;
     }
-    if(m==WM_NOTIFY && (HWND)((NMHDR*)l)->hwndFrom==editor && ((NMHDR*)l)->code==EN_SELCHANGE){
+    if(m==WM_NOTIFY && l && (HWND)((NMHDR*)l)->hwndFrom==editor && ((NMHDR*)l)->code==EN_SELCHANGE){
       updateStatus();return 0;
     }
     if(m==WM_TIMER&&w==HIGHLIGHT_TIMER){KillTimer(h,HIGHLIGHT_TIMER);highlight();return 0;}
@@ -396,10 +437,25 @@ class Studio{
       DragFinish(drop);return 0;
     }
     if(m==WM_CLOSE){if(discard())DestroyWindow(h);return 0;}
-    if(m==WM_DESTROY){KillTimer(h,HIGHLIGHT_TIMER);if(findWindow)DestroyWindow(findWindow);
-      DragAcceptFiles(h,FALSE);if(busy)stop();if(task.joinable())task.join();if(font)DeleteObject(font);
-      if(accelerators)DestroyAcceleratorTable(accelerators);if(richLibrary)FreeLibrary(richLibrary);
-      PostQuitMessage(0);return 0;}
+    if(m==WM_DESTROY){
+      // Child windows (including RichEdit) still exist at this point.
+      // Do NOT unload Msftedit.dll or destroy the shared font here.
+      KillTimer(h,HIGHLIGHT_TIMER);
+      if(findWindow){DestroyWindow(findWindow);findWindow=nullptr;}
+      DragAcceptFiles(h,FALSE);
+      if(busy)stop();
+      if(task.joinable())task.join();
+      PostQuitMessage(0);return 0;
+    }
+    if(m==WM_NCDESTROY){
+      // Windows delivers WM_NCDESTROY AFTER the child controls have gone.
+      // Unloading RichEdit earlier can crash its window procedure (0xC000041D).
+      if(font){DeleteObject(font);font=nullptr;}
+      if(accelerators){DestroyAcceleratorTable(accelerators);accelerators=nullptr;}
+      if(richLibrary){FreeLibrary(richLibrary);richLibrary=nullptr;}
+      SetWindowLongPtrW(h,GWLP_USERDATA,0);
+      return DefWindowProcW(h,m,w,l);
+    }
     return DefWindowProcW(h,m,w,l);
   }
 public:
@@ -426,28 +482,36 @@ public:
     // exercise Unicode text, native WM_COMMAND handling and focus/selection
     // without a person interacting with the desktop.
     if(guiSmoke){
-      ShowWindow(mainWindow,SW_SHOW);UpdateWindow(mainWindow);
+      novaTrace("SMOKE_BEFORE_SHOW");
+      ShowWindow(mainWindow,SW_SHOW);novaTrace("SMOKE_AFTER_SHOW");
+      UpdateWindow(mainWindow);novaTrace("SMOKE_AFTER_UPDATE");
       int result=0;
       try{
+        novaTrace("SMOKE_CHECK_CONTROLS");
         if(!IsWindow(mainWindow)||!IsWindow(editor)||!IsWindow(output)||!IsWindow(status))result=21;
         if(!result){
           loading=true;
           if(!SetWindowTextW(editor,L"покажи \"Київ Łódź\"\r\n"))result=22;
-          loading=false;
+          loading=false;novaTrace("SMOKE_AFTER_SET_TEXT",0,result);
           if(!result && editorText(editor).find(L"Київ Łódź")==std::wstring::npos)result=23;
         }
         if(!result){
           // The real editor window receives and processes the New menu action.
           dirty=false;
+          novaTrace("SMOKE_BEFORE_NEW");
           SendMessageW(mainWindow,WM_COMMAND,MAKEWPARAM(ID_NEW,0),0);
+          novaTrace("SMOKE_AFTER_NEW");
           if(!editorText(editor).empty())result=24;
         }
         if(!result){
+          novaTrace("SMOKE_BEFORE_RESIZE");
           SendMessageW(mainWindow,WM_SIZE,0,MAKELPARAM(1024,700));
+          novaTrace("SMOKE_AFTER_RESIZE");
           if(!IsWindowVisible(editor))result=25;
         }
       }catch(...){result=26;}
-      DestroyWindow(mainWindow);return result;
+      novaTrace("SMOKE_BEFORE_DESTROY",0,result);
+      DestroyWindow(mainWindow);novaTrace("SMOKE_AFTER_DESTROY",0,result);return result;
     }
     SetTimer(mainWindow,HIGHLIGHT_TIMER,100,nullptr);updateStatus();
     ShowWindow(mainWindow,initial);UpdateWindow(mainWindow);MSG msg{};
@@ -474,5 +538,32 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int show){
   fs::path initial;
   int count=0;LPWSTR* argsv=CommandLineToArgvW(GetCommandLineW(),&count);
   if(argsv){if(count>=2&&argsv[1][0]!=L'-')initial=fs::path(argsv[1]);LocalFree(argsv);}
-  Studio studio;return studio.show(h,show,initial,args&&wcsstr(args,L"--gui-smoke")?true:false);
+  const bool smoke=args&&wcsstr(args,L"--gui-smoke");
+  PVOID diagnosticHandler=nullptr;
+  if(smoke){
+    gNovaGuiSmokeTrace=true;
+    DWORD count=GetEnvironmentVariableW(L"NOVA_STUDIO_TRACE_FILE",gNovaGuiSmokeTracePath,32768);
+    if(!count || count>=32768){
+      wchar_t folder[MAX_PATH+1]{};
+      DWORD length=GetTempPathW(MAX_PATH,folder);
+      if(length && length<MAX_PATH){
+        std::wstring fallback=std::wstring(folder)+L"nova-studio-gui-smoke.log";
+        wcscpy_s(gNovaGuiSmokeTracePath,32768,fallback.c_str());
+      }
+    }
+    // Each run starts a fresh trace, so stale logs cannot hide a failure.
+    if(gNovaGuiSmokeTracePath[0])DeleteFileW(gNovaGuiSmokeTracePath);
+    novaTrace("SMOKE_MAIN_BEGIN");
+    diagnosticHandler=AddVectoredExceptionHandler(1,novaFirstChanceFailure);
+  }
+  int result=0;
+  {
+    Studio studio;
+    novaTrace("STUDIO_CONSTRUCTED");
+    result=studio.show(h,show,initial,smoke);
+    novaTrace("STUDIO_SHOW_RETURNED",0,result);
+  }
+  novaTrace("STUDIO_DESTRUCTED",0,result);
+  if(diagnosticHandler)RemoveVectoredExceptionHandler(diagnosticHandler);
+  return result;
 }

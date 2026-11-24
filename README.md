@@ -1,27 +1,20 @@
-# Nova Windows CI Tools Fix 04
+# Nova Windows GUI Diagnostics — Fix 06
 
-Error fixed: `python: can't open file ...\\tools\\verify_pe.py: [Errno 2] No such file or directory`.
+**Current confirmed failure:** `NovaStudio.exe --gui-smoke` crashes with Windows status `0xC000041D` (fatal exception in a user callback). Earlier RichEdit cleanup change did not cure it. The underlying exception is **not yet identified**.
 
-The current workflow expects these three files **at the repository root**:
+## What this patch changes
 
-```
-tools/verify_pe.py
-tools/create_windows_portable.ps1
-tools/test_windows_portable.ps1
-```
+- `studio/nova_studio.cpp`: enables per-event tracing **only** for `--gui-smoke`; writes immediately flushed `NOVA_STUDIO_TRACE_FILE` log; marks window creation, actual control tests, teardown; records fatal first-chance exception code and address through a vectored exception observer without intercepting it. Also initializes `mainWindow=h` at `WM_CREATE` so callbacks have the correct window handle while the window is being created.
+- `.github/workflows/windows-acceptance.yml`: prints the trace when the test fails and uploads the log into `nova-windows-diagnostics` as a failure artifact.
 
-## GitHub web upload
+## Apply
 
-1. Unzip this archive.
-2. Go to https://github.com/alexgsom/novaa and open **Code > Add file > Upload files**.
-3. Drag the unzipped `tools` folder (NOT the zip, NOT the enclosing `Nova_Windows_CI_Tools_Fix_04` folder).
-4. Check that paths are shown as `tools/verify_pe.py`, etc. Commit to the default branch.
-5. Verify https://github.com/alexgsom/novaa/blob/main/tools/verify_pe.py opens. A new push should start Windows CI.
+1. In your GitHub `alexgsom/novaa` repository, **replace** `studio/nova_studio.cpp` with the supplied file (via Edit → paste all → Commit changes).
+2. **Replace** `.github/workflows/windows-acceptance.yml` with the file included here, at the exact same GitHub path.
+3. Check the new run in Actions. If the `--gui-smoke` test fails, expand its step and copy the output after `--- Nova Studio GUI trace ---` into ChatGPT.
 
-If you cannot drag a folder, use **Add file > Create new file** with the exact path `tools/verify_pe.py`, paste its contents from this archive, and commit. Repeat for the `.ps1` files to prevent failures in the later packaging steps.
+The supplied Windows workflow was based on the Nova Beta 2 workflow from our build, so if you have made unrelated changes to yours, preserve them and copy only the diagnostic step plus the `runner.temp` log artifact entry.
 
-## Note
+## Important
 
-`verify_pe.py` uses Python ONLY as a **CI inspection tool**. Nova itself does not require Python to run.
-
-The fix is verified locally for script presence and synthetic PE fixtures. Only GitHub Actions can confirm this specific MSVC/Windows pipeline succeeds.
+No Windows environment exists in this workspace, so real `NovaStudio.exe --gui-smoke` behavior cannot be verified here. The patch intentionally **does not suppress the crash or declare success**. The trace locates where the crash occurs and records the first-chance exception address, enabling a targeted fix after the next Windows run.
