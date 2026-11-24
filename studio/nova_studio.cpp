@@ -410,7 +410,7 @@ public:
     root=fs::path(location).parent_path();if(root.filename()==L"bin")root=root.parent_path();
     runtime=root/L"bin"/L"nova-native.exe";windowed=root/L"bin"/L"nova-windowed.exe";
     compiler=root/L"compiler"/L"novac_selfhost.nbc";
-    WNDCLASSW wc{};wc.hInstance=instance;wc.lpfnWndProc=callback;wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    WNDCLASSW wc{};wc.hInstance=instance;wc.lpfnWndProc=callback;wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(OCR_NORMAL));
     wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);wc.lpszClassName=L"NovaStudio10Window";
     if(!RegisterClassW(&wc))return 2;
     mainWindow=CreateWindowW(wc.lpszClassName,L"Nova Studio",WS_OVERLAPPEDWINDOW,
